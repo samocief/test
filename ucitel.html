@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Písomky · učiteľ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;800&display=swap">
+<link rel="stylesheet" href="css/app.css?v=1.0">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231c4f8a'/%3E%3Crect x='8' y='7' width='16' height='19' rx='2' fill='%23f5f7ea'/%3E%3Cpath d='M11 13h10M11 17h10M11 21h6' stroke='%231c4f8a' stroke-width='2'/%3E%3Ccircle cx='23' cy='8' r='3.5' fill='%23ff74b4'/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1 data-i18n="app.teacher_title">Písomky</h1>
+    <a id="t-sheet" class="small" target="_blank" rel="noopener" hidden data-i18n="t.open_sheet"></a>
+  </header>
+
+  <section id="t-load" data-screen="t"><p class="muted"><span class="spin"></span><span data-i18n="common.loading">Načítavam…</span></p></section>
+
+  <section id="t-connect" data-screen="t" hidden>
+    <div class="panel">
+      <h2 data-i18n="t.connect_title"></h2>
+      <p id="t-connect-err" class="alert" hidden></p>
+      <ol class="rules" style="list-style:decimal">
+        <li data-i18n-html="t.connect_1"></li>
+        <li data-i18n-html="t.connect_2"></li>
+        <li data-i18n-html="t.connect_3"></li>
+      </ol>
+      <p class="small muted" data-i18n-html="t.connect_help"></p>
+    </div>
+  </section>
+
+  <section id="t-app" data-screen="t" hidden>
+    <nav class="tabs" role="tablist" id="t-nav">
+      <button type="button" id="tab-new" data-i18n="t.tab_new"></button>
+      <button type="button" id="tab-tests" data-i18n="t.tab_tests"></button>
+    </nav>
+    <p id="t-status" class="small" hidden></p>
+
+    <!-- nová písomka -->
+    <div id="v-new" class="stack" hidden>
+      <div class="panel">
+        <h2 data-i18n="t.step1"></h2>
+        <div class="row">
+          <label for="f-cls"><span data-i18n="t.class"></span><select id="f-cls"></select></label>
+          <label for="f-bank"><span data-i18n="t.bank"></span><select id="f-bank"></select></label>
+        </div>
+        <div id="f-bank-err" class="stack tight" hidden></div>
+        <div id="f-groups" class="stack tight" hidden></div>
+        <div class="row" style="align-items:center"><button type="button" id="list-toggle" aria-controls="list-box"></button><p id="list-hidden" class="small muted" data-i18n="t.list_hidden"></p></div>
+        <div id="list-box" class="stack tight" hidden></div>
+      </div>
+
+      <div class="panel">
+        <h2 data-i18n="t.step2"></h2>
+        <div class="row">
+          <label for="f-title"><span data-i18n="t.title"></span><input id="f-title" maxlength="80" autocomplete="off" data-i18n-attr="placeholder:t.title_ph"></label>
+          <label for="f-time" style="flex:0 1 180px"><span data-i18n="t.time"></span><input id="f-time" type="number" min="1" max="240" inputmode="numeric"></label>
+        </div>
+        <label class="chip" for="f-shuffle" style="align-self:flex-start"><input type="checkbox" id="f-shuffle"> <span data-i18n="t.shuffle"></span></label>
+        <p class="small muted" data-i18n="t.shuffle_note"></p>
+        <div class="row"><label for="f-reveal"><span data-i18n="t.reveal"></span><select id="f-reveal">
+          <option value="all" data-i18n="t.reveal_all"></option><option value="pct" data-i18n="t.reveal_pct"></option></select></label></div>
+      </div>
+
+      <div class="stack tight">
+        <div class="row"><button class="primary big" id="start" type="button" data-i18n="t.start"></button><button class="big" id="prepare" type="button" data-i18n="t.prepare"></button></div>
+        <p id="start-msg" class="small" hidden></p>
+        <p class="small muted" data-i18n="t.start_hint"></p>
+      </div>
+    </div>
+
+    <!-- spustená písomka -->
+    <div id="v-started" class="stack" hidden>
+      <div class="panel" style="align-items:center;text-align:center">
+        <h2 id="started-title"></h2>
+        <p id="started-text"></p>
+        <div class="qr" id="started-qr" style="width:min(320px,80vw)"></div>
+        <p class="small"><a id="started-link" target="_blank" rel="noopener"></a></p>
+        <div class="row" style="justify-content:center">
+          <button type="button" class="primary" id="started-go" data-i18n="t.start_test" hidden></button>
+          <button type="button" id="started-full" data-i18n="t.qr_full"></button>
+          <button type="button" id="started-dozor" data-i18n="t.dozor"></button>
+          <button type="button" id="started-open" data-i18n="t.open_overview"></button>
+          <button type="button" id="started-new" data-i18n="t.new_again"></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- zoznam písomiek -->
+    <div id="v-tests" class="stack" hidden><div id="tests-list"></div></div>
+
+    <!-- jedna písomka -->
+    <div id="v-test" class="stack" hidden>
+      <div id="dz-help" class="panel" hidden>
+        <h2 data-i18n="t.dz_title"></h2>
+        <ol class="rules" style="list-style:decimal">
+          <li data-i18n-html="t.dz_1"></li><li data-i18n-html="t.dz_2"></li><li data-i18n-html="t.dz_3"></li><li data-i18n-html="t.dz_4"></li><li data-i18n-html="t.dz_5"></li>
+        </ol>
+      </div>
+      <p id="test-msg" class="small" hidden></p>
+      <div id="test-body" class="stack" hidden>
+        <div class="panel">
+          <div class="testhead">
+            <div class="stack tight" style="flex:1 1 260px">
+              <h2><span id="test-title"></span> <span id="test-state" class="badge"></span></h2>
+              <p id="test-meta" class="small muted"></p>
+              <div class="row">
+                <button type="button" id="test-toggle"></button>
+                <button type="button" id="test-qr-btn" data-i18n="t.qr_full"></button>
+                <button type="button" id="test-dozor-btn" data-i18n="t.dozor"></button>
+              </div>
+              <p class="small muted" id="test-toggle-hint"></p>
+              <div class="row" id="test-reveal-row"><label for="test-reveal" class="small" style="flex:0 1 360px"><span data-i18n="t.reveal_set"></span><select id="test-reveal">
+                <option value="all" data-i18n="t.reveal_all"></option><option value="pct" data-i18n="t.reveal_pct"></option></select></label></div>
+              <label class="chip" for="show-res" style="align-self:flex-start"><input type="checkbox" id="show-res"> <span data-i18n="t.show_results"></span></label>
+            </div>
+            <div class="qr" id="test-qr"></div>
+          </div>
+        </div>
+        <nav class="tabs" role="tablist" id="sub-tabs">
+          <button type="button" id="sub-over-b" data-i18n="t.sub_over"></button>
+          <button type="button" id="sub-qs-b" data-i18n="t.sub_qs"></button>
+        </nav>
+
+        <div id="sub-over" class="stack" hidden>
+          <div class="avgbox">
+            <div><span class="small muted" data-i18n="t.avg_label"></span><div class="bigpct" id="avg-pct"></div></div>
+            <p class="small muted" id="avg-note"></p>
+          </div>
+          <p id="over-sum" class="small muted"></p>
+          <div id="over-table" class="tablebox"></div>
+          <div class="row"><button type="button" id="over-copy" data-i18n="t.copy_results"></button><p id="over-msg" class="small" hidden></p></div>
+        </div>
+
+        <div id="sub-qs" class="stack" hidden>
+          <div id="qs-gate" class="panel" hidden>
+            <p data-i18n="t.qs_wait"></p>
+            <div><button type="button" id="qs-force" data-i18n="t.qs_force"></button></div>
+          </div>
+          <div id="qs-body" class="stack">
+            <p class="small muted" data-i18n="t.qs_note"></p>
+            <p class="small muted" data-i18n="t.fix_hint"></p>
+            <p id="qs-msg" class="small" hidden></p>
+            <div id="qs-list" class="qstat"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot2" id="t-foot" hidden><span id="t-conn"></span><span id="t-ver"></span><button type="button" class="linkbtn" id="t-disconnect" data-i18n="t.disconnect"></button></footer>
+</div>
+
+<div id="qr-cover" class="cover" hidden>
+  <div class="qrbig" id="qr-box"><b id="qr-title"></b><p id="qr-warn" class="bad" hidden></p><div class="qr" id="qr-big"></div><span id="qr-link" class="small"></span>
+    <div class="row" style="justify-content:center"><button type="button" id="qr-print" class="primary" data-i18n="t.print_dozor" hidden></button><button type="button" id="qr-close" data-i18n="common.close"></button></div></div>
+</div>
+<div id="print-sheet"></div>
+
+<script src="js/qrcode.js?v=1.0"></script>
+<script src="js/core.js?v=1.0"></script>
+<script src="js/teacher.js?v=1.0"></script>
+</body>
+</html>
