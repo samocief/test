@@ -13,7 +13,7 @@ Prvý odchod z testu (iná karta, iná aplikácia, zamknutie telefónu) strhne 1
 |---|---|---|
 | **Otázky** | učiteľ | Test, Skupina (A/B/prázdne = obe), Otázka, A–F (aspoň dve), Správna (písmeno), Obrázok (odkaz), Aktívna |
 | **Žiaci** | učiteľ | Trieda, Meno („Priezvisko Meno“), Skupina (A/B), voliteľne Aktívny |
-| Testy, Výsledky …, _balíky | skript | spustené písomky, výsledky (písmeno odpovede, ✓ / ✗), snímka otázok |
+| Testy, Res_…, _balíky | skript | spustené písomky, výsledky (písmeno odpovede, ✓ / ✗), snímka otázok |
 
 - Všetky riadky s rovnakým názvom v stĺpci **Test** tvoria jeden test.
 - **Skupiny:** ak test má otázky pre A aj B a trieda má v hárku Žiaci žiakov v A aj B, každá skupina píše svoje otázky

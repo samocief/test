@@ -270,7 +270,7 @@ async function tOpenTest(id) {
     $('test-qr-btn').onclick = function () { tQrShow(d.test.title || id, pupilUrl(id)); };
     $('test-dozor-btn').hidden = T.dz || !T.cur.dk;
     $('test-dozor-btn').onclick = function () { tDozorShow(tSummary()); };
-    $('test-reveal-row').hidden = T.dz;
+    $('test-reveal-row').hidden = T.dz; $('over-export').hidden = T.dz;
     $('test-reveal').value = d.test.reveal === 'pct' ? 'pct' : 'all';
     $('test-body').hidden = false; tStatus('test-msg', '');
     tSub(T.sub); tPollStart();
@@ -406,6 +406,21 @@ function tCopyResults() {
   });
   copyText(lines.join('\n'), 'over-msg', t('t.copied_results'));
 }
+// Písomky všetkých žiakov (bez učiteľa) ako PDF na Disk: jeden žiak = jedna požiadavka, aby bolo vidno postup.
+async function tExportAll() {
+  var rs = T.cur.stat.slice().sort(function (a, b) { return a.name.localeCompare(b.name, 'sk'); }), folder = '', btn = $('over-export');
+  if (!rs.length) { tStatus('over-msg', t('t.no_results'), 'bad'); return; }
+  btn.disabled = true;
+  try {
+    for (var i = 0; i < rs.length; i++) {
+      tStatus('over-msg', t('t.export_progress', { i: i + 1, n: rs.length }));
+      folder = (await apiRetry('tExportPupil', A({ t: T.cur.id, row: rs[i].row }), 3)).folderUrl;
+    }
+    $('over-msg').innerHTML = esc(t('t.export_done', { n: rs.length })) + ' <a target="_blank" rel="noopener" href="' + esc(folder) + '">' + esc(t('t.open_folder')) + '</a>';
+    $('over-msg').className = 'small ok'; $('over-msg').hidden = false;
+  } catch (e) { tStatus('over-msg', t('t.export_failed', { msg: errText(e) }), 'bad'); }
+  btn.disabled = false;
+}
 
 /* štatistika otázok a oprava kľúča */
 function qTag(k) {
@@ -462,6 +477,7 @@ async function tFixKey(it, i) {
   on('list-toggle', function () { tListToggle(!T.listOpen); });
   on('show-res', function () { T.showRes = this.checked; tOverview(); }, 'onchange');
   on('over-copy', tCopyResults);
+  on('over-export', tExportAll);
   on('qs-force', function () { T.qsForce = true; tQs(); });
   on('test-toggle', tToggleState);
   on('test-reveal', tSetReveal, 'onchange');

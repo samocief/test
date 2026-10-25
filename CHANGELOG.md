@@ -1,5 +1,14 @@
 # Zmeny
 
+## 1.3 (2026-10-25) – treba vymeniť skript tabuľky
+
+- **Id testu** má tvar `trieda_MM-dd_HH:mm`, napr. `9A_10-25_19:49`. **Hárok výsledkov** sa volá `Res_<id>` (napr. `Res_9A_10-25_19:49`)
+  a nový ide hneď za hárok Testy: najnovší vľavo.
+- Pri prvom otvorení aplikácie učiteľa po výmene skriptu sa staré testy premenujú (hárok Testy, výsledky, balíky, prihlásenia)
+  a hárky zoradia. Staré odkazy, QR kódy a odkazy pre dozor fungujú ďalej. Znova: ponuka Písomky → Usporiadať hárky výsledkov.
+- **Uložiť písomky na Disk (PDF)** v prehľade testu: pre každého žiaka PDF s výsledkom a všetkými otázkami, zvolená odpoveď
+  a správna sú vyznačené. Ukladá sa do priečinka `Písomky – žiaci/<id testu>` vedľa tabuľky. Prvé uloženie si vypýta povolenie pre Disk.
+
 ## 1.2 (2026-10-25)
 
 - **Výsledky len 15 minút po uzavretí.** Žiak vidí svoje vyhodnotenie 15 minút od uzavretia testu, potom zmizne zo stránky
