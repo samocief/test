@@ -4,7 +4,7 @@
  * Čas beží na serveri od ťuknutia na Začať. Skupinu (A/B) určí tabuľka učiteľa.
  */
 var P = { t: '', info: null, qs: null, S: null, phase: 'idle', tick: null, device: '', blurTimer: null, wake: null, poll: null, wait: null,
-  deadline: 0, saveTimer: null, penalty: 0.1, hadFocus: false };
+  deadline: 0, saveTimer: null, penalty: 0.1, hadFocus: false, hide: null };
 var AWAY_HIDDEN_MS = 1000, AWAY_BLUR_MS = 4000, POLL_MS = 8000, SAVE_MS = 3000, NEED_SCRIPT = '1.0';
 
 function pShow(id) { show(id, 'p'); $('p-wrap').hidden = id === 'p-game'; }
@@ -343,7 +343,10 @@ async function pupilResults() {
   pLoading(t('p.loading_results'));
   var R;
   try { R = await apiRetry('pupilResult', { t: P.t, p: saved.pupilId, d: P.device }, 3); }
-  catch (e) { pFail(e.code === 'no_result' || e.code === 'not_logged' ? t('p.no_result') : errText(e)); return; }
+  catch (e) {
+    if (e.code === 'review_over') { pupilReviewOver(); return; }
+    pFail(e.code === 'no_result' || e.code === 'not_logged' ? t('p.no_result') : errText(e)); return;
+  }
   $('r-title').textContent = R.name;
   $('r-sub').textContent = [R.title, t('p.class', { cls: R.cls }), R.group ? t('p.group', { g: R.group }) : ''].filter(Boolean).join(' · ');
   $('r-pct').textContent = fmtPct(R.pct);
@@ -369,6 +372,14 @@ async function pupilResults() {
     });
   }
   pShow('p-results');
+  // Po uplynutí času na prezeranie sa výsledky zo stránky zmažú (skript ich potom už ani nepošle).
+  clearTimeout(P.hide);
+  if (typeof R.left === 'number') P.hide = setTimeout(pupilReviewOver, Math.max(1000, R.left));
+}
+function pupilReviewOver() {
+  clearTimeout(P.hide); P.hide = null;
+  $('r-list').innerHTML = '';
+  pFail(t('p.review_over'));
 }
 
 /* ---------- tlačidlá a klávesnica ---------- */

@@ -1,5 +1,13 @@
 # Zmeny
 
+## 1.2 (2026-10-25)
+
+- **Výsledky len 15 minút po uzavretí.** Žiak vidí svoje vyhodnotenie 15 minút od uzavretia testu, potom zmizne zo stránky
+  a ani po znovuotvorení odkazu sa už nezobrazí (chýbajúci žiaci ho o týždeň neuvidia). Dĺžka je `REVIEW_MIN` v Code.gs.
+  Opätovným otvorením a uzavretím testu sa 15 minút spustí znova.
+- **Poznámky s odpoveďami v hárku výsledkov.** Bunka otázky má poznámku „Zvolil: … / Správne: …“ s celým znením,
+  hlavička otázky celé znenie otázky so všetkými možnosťami. Staršie hárky: ponuka Písomky → Doplniť poznámky s odpoveďami.
+
 ## 1.1 (2026-10-25)
 
 - **Pás času a pás otázok sú pod sebou**, rovnako dlhé a začínajú na rovnakom mieste. Hneď vidno, či žiak stíha (pás otázok kratší ako pás času) alebo mešká.

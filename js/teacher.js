@@ -322,7 +322,7 @@ function tHead() {
   b.textContent = t('state.' + st); b.className = 'badge' + (st === 'open' ? ' open' : '');
   $('test-toggle').textContent = st === 'ready' ? t('t.start_test') : st === 'open' ? t('t.close_test') : t('t.reopen_test');
   $('test-toggle').className = st === 'closed' ? '' : 'primary';
-  $('test-toggle-hint').textContent = st === 'ready' ? t('t.ready_hint') : st === 'open' ? t('t.close_hint') : t('t.closed_hint');
+  $('test-toggle-hint').textContent = st === 'ready' ? t('t.ready_hint') : st === 'open' ? t('t.close_hint', { min: x.review || 15 }) : t('t.closed_hint', { min: x.review || 15 });
   $('test-meta').textContent = [t('t.class_short', { cls: x.cls }), x.bank && x.bank !== x.title ? x.bank : '', t('t.n_questions', { n: (x.groups ? x.keysA : x.keys).length }), x.groups ? t('t.groups_ab') : '',
     t('t.time_short', { n: x.total }), x.created, x.id].filter(Boolean).join(' · ');
 }
