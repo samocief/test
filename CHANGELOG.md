@@ -1,5 +1,9 @@
 # Zmeny
 
+## 1.1 (2026-10-25)
+
+- **Pás času a pás otázok sú pod sebou**, rovnako dlhé a začínajú na rovnakom mieste. Hneď vidno, či žiak stíha (pás otázok kratší ako pás času) alebo mešká.
+
 ## 1.0 (2026-10-23)
 
 Prvá verzia, postavená na písomke zo Slepej mapy (2.15).
