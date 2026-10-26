@@ -1,5 +1,12 @@
 # Zmeny
 
+## 1.4 (2026-10-26)
+
+- **Stráž zmenšeného okna:** rozdelená obrazovka, plávajúce okno alebo zmenšený prehliadač počas testu hneď zakryje test. Ak žiak okno do 4 s nezväčší, počíta sa to ako odchod (raz za jedno zmenšenie). Otočenie telefónu ani priblíženie stránky (Ctrl +) to nespustí.
+- **Kontrola pred začiatkom:** ak je okno oproti obrazovke príliš malé (napr. už rozdelená obrazovka), tlačidlo Začať žiaka nepustí, kým okno nezväčší.
+- **Dôvod odchodu v udalostiach:** pri každom odchode sa zapíše aj dôvod (iná karta alebo aplikácia, iné okno, zatvorená alebo obnovená stránka, zmenšené okno). Odchody, ktoré nastanú naraz (napr. rozdelená obrazovka = iné okno aj zmenšené okno), sa rátajú ako jeden.
+- Skript tabuľky sa nemení.
+
 ## 1.3 (2026-10-25) – treba vymeniť skript tabuľky
 
 - **Id testu** má tvar `trieda_MM-dd_HH:mm`, napr. `9A_10-25_19:49`. **Hárok výsledkov** sa volá `Res_<id>` (napr. `Res_9A_10-25_19:49`)

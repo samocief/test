@@ -128,6 +128,8 @@ function pupilIntro() {
   $('p-intro-err').hidden = true;
   go.disabled = false; go.textContent = t('p.start');
   go.onclick = async function () {
+    if (winSmallVsScreen()) { $('p-intro-err').textContent = t('p.small_start'); $('p-intro-err').hidden = false; return; }
+    $('p-intro-err').hidden = true;
     go.disabled = true; go.textContent = t('common.loading');
     var r;
     try { r = await apiRetry('pupilBegin', { t: P.t, p: S.pupilId, d: P.device }, 3); }
@@ -145,7 +147,7 @@ function pupilGame(afterReload) {
   P.phase = 'test';
   pupilQuestion();
   clearInterval(P.tick); P.tick = setInterval(pupilTimer, 250);
-  pupilWake();
+  pupilWake(); P.smallHit = false;
   // Stránka bola počas písania zatvorená alebo obnovená: počíta sa to ako odchod.
   if (afterReload && P.S.awayAt) pupilCheckAway(true);
   if (P.phase === 'test') pupilTimer();
@@ -223,6 +225,7 @@ function pupilTimer() {
   // Systémové okno cez stránku (asistent, vyhľadávanie z obrazovky) môže zobrať stránke zameranie bez udalosti blur.
   if (document.hasFocus()) P.hadFocus = true;
   else if (P.hadFocus && !document.hidden && $('p-blur').hidden) pupilBlur();
+  pupilSize(); if (P.phase !== 'test') return;
   pupilMeters();
   if (P.deadline - Date.now() <= 0 && !S.awayAt) { S.done = true; S.why = 'time'; pSave(); pupilFinish(); }
 }
@@ -257,6 +260,7 @@ function pupilGuard() {
   window.addEventListener('pagehide', pupilAway);
   window.addEventListener('pageshow', function () { if (!document.hidden) pupilCheckAway(false); });
   window.addEventListener('blur', pupilBlur);
+  window.addEventListener('resize', pupilSize);
   window.addEventListener('focus', function () { clearTimeout(P.blurTimer); $('p-blur').hidden = true; if (!document.hidden) pupilCheckAway(false); });
   $('p-blur').onclick = function () { window.focus(); };
 }
@@ -269,10 +273,45 @@ function pupilWake() {
   }).catch(function () {});
 }
 function pupilWakeOff() { if (P.wake) { P.wake.release().catch(function () {}); P.wake = null; } }
+
+/* ---------- zmenšené okno ---------- */
+// Rozdelená obrazovka, plávajúce okno alebo zmenšený prehliadač. Stránka zostáva viditeľná a často aj so zameraním,
+// takže to udalosti o odchode nezachytia; stráži sa preto plocha okna.
+// Plocha vo fyzických pixeloch: priblíženie stránky (Ctrl +) ju nemení a otočenie telefónu takmer tiež.
+function winArea() { var d = document.documentElement, r = window.devicePixelRatio || 1; return d.clientWidth * d.clientHeight * r * r; }
+// Okno je oproti obrazovke malé (napr. polovica rozdelenej obrazovky už pred začiatkom alebo po obnovení stránky).
+// Na telefóne a tablete sa porovnáva viditeľná časť stránky, na počítači celé okno prehliadača (nie maximalizované okno ešte prejde).
+function winSmallVsScreen() {
+  var s = window.screen; if (!s || !s.width || !s.height) return false;
+  if (window.matchMedia && matchMedia('(pointer: coarse)').matches) {
+    var d = document.documentElement; return d.clientWidth * d.clientHeight < 0.55 * s.width * s.height;
+  }
+  if (!window.outerWidth || !window.outerHeight) return false;
+  return window.outerWidth * window.outerHeight < 0.6 * (s.availWidth || s.width) * (s.availHeight || s.height);
+}
+// Okno sa počas testu zmenšilo pod 70 % najväčšej plochy, akú malo (lišta prehliadača na telefóne uberie len okolo 10 %).
+function winTooSmall() {
+  var S = P.S, a = winArea();
+  if (a > (S.maxArea || 0)) { S.maxArea = a; pSave(); }
+  return a < 0.7 * S.maxArea || winSmallVsScreen();
+}
+// Malé okno zakryje test hneď. Ak sa do 4 s nezväčší, počíta sa to ako odchod (raz za jedno zmenšenie).
+function pupilSize() {
+  if (P.phase !== 'test' || document.hidden || !P.S) return;
+  var a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;   // klávesnica telefónu zmenší okno
+  var box = $('p-small');
+  if (!winTooSmall()) { if (!box.hidden) { box.hidden = true; clearTimeout(P.smallTimer); P.smallTimer = null; P.smallHit = false; } return; }
+  if (!box.hidden) return;
+  box.hidden = false; clearTimeout(P.smallTimer);
+  P.smallTimer = setTimeout(function () {
+    P.smallTimer = null;
+    if (P.phase === 'test' && !P.smallHit && winTooSmall()) { P.smallHit = true; pupilLeft('zmenšené okno'); }
+  }, AWAY_BLUR_MS);
+}
 function pupilBlur() {
   if (P.phase !== 'test' || document.hidden) return;
   $('p-blur').hidden = false; clearTimeout(P.blurTimer);
-  P.blurTimer = setTimeout(function () { if (P.phase === 'test' && !document.hasFocus()) { $('p-blur').hidden = true; pupilLeft(); } else $('p-blur').hidden = true; }, AWAY_BLUR_MS);
+  P.blurTimer = setTimeout(function () { if (P.phase === 'test' && !document.hasFocus()) { $('p-blur').hidden = true; pupilLeft('iné okno'); } else $('p-blur').hidden = true; }, AWAY_BLUR_MS);
 }
 function pupilAway() {
   var S = P.S; if (!S || P.phase !== 'test' || S.awayAt) return;
@@ -283,15 +322,18 @@ function pupilCheckAway(afterReload) {
   var S = P.S; if (!S || !S.awayAt || P.phase !== 'test') return;
   var dt = Date.now() - S.awayAt;
   S.awayAt = 0; pSave();
-  if (afterReload || dt >= AWAY_HIDDEN_MS) pupilLeft();
+  if (afterReload || dt >= AWAY_HIDDEN_MS) pupilLeft(afterReload ? 'zatvorená alebo obnovená stránka' : 'iná karta alebo aplikácia');
 }
 // Prvý odchod: varovanie a strhnutie z celkového výsledku (počíta skript tabuľky). Druhý: test sa ukončí a odovzdá.
-function pupilLeft() {
+function pupilLeft(why) {
   if (P.phase !== 'test') return;
+  // Jeden odchod často spustí viac strážcov naraz (rozdelená obrazovka = zmenšené okno aj iné okno): ráta sa raz.
+  if (Date.now() - (P.lastLeave || 0) < 10000) return;
+  P.lastLeave = Date.now();
   var S = P.S;
   clearTimeout(P.blurTimer); $('p-blur').hidden = true;
   S.leaves = (S.leaves || 0) + 1; S.awayAt = 0; pSave();
-  api('pupilEvent', { t: P.t, p: S.pupilId, d: P.device, leave: S.leaves, what: 'odchod z testu č. ' + S.leaves }).catch(function () {});
+  api('pupilEvent', { t: P.t, p: S.pupilId, d: P.device, leave: S.leaves, what: 'odchod z testu č. ' + S.leaves + (why ? ' – ' + why : '') }).catch(function () {});
   if (S.leaves >= 2) { S.ended = true; S.done = true; S.why = 'ended'; pSave(); pupilFinish(); return; }
   $('p-left-msg').textContent = t('p.left_msg', { pct: Math.round(P.penalty * 100) });
   $('p-left-go').onclick = function () { pShow('p-game'); pupilQuestion(true); };
@@ -301,6 +343,7 @@ function pupilLeft() {
 /* ---------- odovzdanie a čakanie na výsledky ---------- */
 function pupilFinish() {
   P.phase = 'idle'; pupilWakeOff(); clearInterval(P.tick); clearTimeout(P.saveTimer); clearTimeout(P.blurTimer); $('p-blur').hidden = true;
+  clearTimeout(P.smallTimer); $('p-small').hidden = true;
   var S = P.S;
   $('p-end-title').textContent = S.why === 'time' ? t('p.end_time') : S.ended ? t('p.end_ended') : t('p.end_done', { name: greetName(S) });
   $('p-end-ended').hidden = !S.ended;
