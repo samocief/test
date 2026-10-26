@@ -7,7 +7,7 @@
 - Pri prvom otvorení aplikácie učiteľa po výmene skriptu sa staré testy premenujú (hárok Testy, výsledky, balíky, prihlásenia)
   a hárky zoradia. Staré odkazy, QR kódy a odkazy pre dozor fungujú ďalej. Znova: ponuka Písomky → Usporiadať hárky výsledkov.
 - **Uložiť písomky na Disk (PDF)** v prehľade testu: pre každého žiaka PDF s výsledkom a všetkými otázkami, zvolená odpoveď
-  a správna sú vyznačené. Ukladá sa do priečinka `Písomky – žiaci/<id testu>` vedľa tabuľky. Po výmene skriptu treba raz povoliť Disk: v editore skriptu vybrať funkciu `organizeResults`, Spustiť a potvrdiť povolenia.
+  a správna sú vyznačené. Ukladá sa do priečinka `Písomky – žiaci/<id testu>` vedľa tabuľky. Po výmene skriptu treba raz povoliť Disk: v editore skriptu vybrať funkciu `povolitDisk`, Spustiť a potvrdiť všetky povolenia, potom nasadiť novú verziu.
 
 ## 1.2 (2026-10-25)
 

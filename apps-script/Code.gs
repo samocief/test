@@ -209,6 +209,13 @@ function addAnswerNotes() {
   });
   ui.alert('Poznámky doplnené pri ' + n + ' žiakoch. Ukážu sa po prejdení myšou na bunku.');
 }
+// Jednorazovo po výmene skriptu: v editore vybrať povolitDisk a Spustiť, potvrdiť povolenia (Disk, internet).
+// Webová aplikácia sama o povolenie nepožiada, bez neho ukladanie písomiek na Disk zlyhá.
+function povolitDisk() {
+  const f = DriveApp.createFolder('test povolenia');
+  f.setTrashed(true);
+  UrlFetchApp.fetch('https://www.google.com', { muteHttpExceptions: true });
+}
 function deployId_(url) { const m = /\/s\/([-\w]+)\/(exec|dev)/.exec(url || ''); return m ? m[1] : ''; }
 function execUrl_() {
   const saved = ownProp_('URL');
