@@ -274,3 +274,44 @@ footer.copy{justify-content:center}
 .cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media (max-width:640px){.cols2{grid-template-columns:1fr}}
 .banksum{display:flex;flex-wrap:wrap;gap:6px 14px}
+
+/* obrázok otázky: lupa v rohu, ťuknutím na celú obrazovku */
+.qimgbox{position:relative;align-self:center;max-width:100%;display:flex}
+.rq .qimgbox{align-self:flex-start}
+.qimg.zoomable{cursor:zoom-in}
+.zoomico{position:absolute;right:8px;bottom:8px;width:34px;height:34px;border-radius:50%;background:rgba(10,18,20,.62);color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.zoomico svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+.zoom{position:fixed;inset:0;z-index:40;background:rgba(6,12,14,.94);display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:zoom-out}
+.zoom.zoomed{cursor:grab}
+.zimg{max-width:100%;max-height:100%;object-fit:contain;background:#fff;transform-origin:50% 50%;will-change:transform;-webkit-user-drag:none;pointer-events:none}
+.zbar{position:absolute;top:calc(10px + env(safe-area-inset-top));right:10px;display:flex;gap:8px}
+.zbtn{width:48px;height:48px;padding:0;border-radius:50%;font-size:1.5rem;line-height:1;background:rgba(255,255,255,.92);color:#18262a;border:0}
+.zbtn.zclose{background:#fff;font-size:1.25rem}
+.zhint{position:absolute;left:0;right:0;bottom:calc(12px + env(safe-area-inset-bottom));text-align:center;color:#d6e0de;font-size:.9rem;padding:0 16px;pointer-events:none}
+.zoom.zoomed .zhint{display:none}
+body.zooming{overflow:hidden}
+
+/* otázka s dopisovaním */
+.tans input{font-size:1.2rem;min-height:56px;border-width:2px;background:var(--panel)}
+.tans input:focus{border-color:var(--accent)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.rq.rev{border-left-color:#c58a00}
+.rq li.rev{background:#fbefd0;color:#8a5a00;font-weight:700}
+@media (prefers-color-scheme: dark){ .rq li.rev{background:#3a2e10;color:#f0c35a} }
+.drow.trow{grid-template-columns:1.6em minmax(0,1fr) minmax(50px,22%) 2.4em 11.5em}
+.drow.trow .ic{font-weight:800;text-align:center}
+.drow.trow.ok{color:var(--ok)}
+.drow.trow.ok .bar > i{background:var(--ok)}
+.drow.trow.review{color:#8a5a00;font-weight:700}
+@media (prefers-color-scheme: dark){ .drow.trow.review{color:#f0c35a} }
+.drow.trow.review .bar > i{background:#c58a00}
+.drow.trow .act{display:flex;gap:6px;justify-content:flex-end}
+.drow.trow .act button{min-height:32px;padding:3px 10px;font-weight:600;text-decoration:none;border:1px solid var(--line);border-radius:8px;font-size:.85rem;background:var(--panel);color:var(--ink)}
+.drow.trow .act button.primary{border-color:var(--accent);background:var(--accent);color:var(--on-accent)}
+.qs.hasrev{border-color:#c58a00;box-shadow:0 0 0 1px #c58a00 inset}
+.qs .qq .badge{margin-left:8px;font-weight:600}
+@media (max-width:560px){
+  .drow.trow{grid-template-columns:1.4em minmax(0,1fr) 2.2em;row-gap:4px}
+  .drow.trow .bar{display:none}
+  .drow.trow .act{grid-column:2 / -1;justify-content:flex-start}
+}

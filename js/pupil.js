@@ -123,6 +123,7 @@ function pupilIntro() {
   $('p-intro-hello').textContent = t('p.hello', { name: greetName(S) });
   $('p-intro-sub').textContent = [P.info.title, S.group ? t('p.group', { g: S.group }) : ''].filter(Boolean).join(' · ');
   $('p-intro-n').innerHTML = esc(t('p.intro_n', { n: S.order.length, min: S.total })).replace(/\*(.+?)\*/g, '<b>$1</b>');
+  $('p-intro-text').hidden = !S.order.some(function (k) { return P.qs[k] && P.qs[k].text; });
   $('p-intro-leave').textContent = t('p.rule_leave', { pct: Math.round(P.penalty * 100) });
   $('p-intro-wake').textContent = t('wakeLock' in navigator ? 'p.rule_lock' : 'p.rule_lock_old');
   $('p-intro-err').hidden = true;
@@ -157,9 +158,9 @@ function pupilQuestion(keepScroll) {
   $('g-name').textContent = t('p.question_n', { n: S.idx + 1 });
   $('g-i').textContent = S.idx + 1; $('g-n').textContent = S.order.length;
   $('g-q').textContent = q.q;
-  var img = $('g-img');
-  if (q.img) { if (img.getAttribute('src') !== q.img) img.src = q.img; img.hidden = false; img.onerror = function () { img.hidden = true; }; }
-  else { img.hidden = true; img.removeAttribute('src'); }
+  var img = $('g-img'), ibox = $('g-imgbox');
+  if (q.img) { if (img.getAttribute('src') !== q.img) img.src = q.img; ibox.hidden = false; img.onerror = function () { ibox.hidden = true; }; }
+  else { ibox.hidden = true; img.removeAttribute('src'); }
   pupilOpts();
   var fl = $('g-flag'); fl.classList.toggle('on', !!S.marks[k]); fl.setAttribute('aria-pressed', S.marks[k] ? 'true' : 'false');
   $('g-prev').disabled = S.idx === 0;
@@ -167,11 +168,20 @@ function pupilQuestion(keepScroll) {
   $('g-btn').classList.toggle('primary', !last || pupilAnswered() === S.order.length);
   if (!keepScroll) $('g-scroll').scrollTop = 0;
   pupilNav(); pupilMeters();
+  // na počítači sa do políčka dá písať hneď; na telefóne nie, klávesnica by zakryla otázku aj obrázok
+  if (q.text && !keepScroll && window.matchMedia && matchMedia('(pointer: fine)').matches) setTimeout(function () { if (P.phase === 'test' && curKey() === k) $('g-input').focus(); }, 0);
 }
-// Možnosti v poradí žiaka; písmená A, B, C… sú podľa toho, ako ich vidí on.
+// Možnosti v poradí žiaka; písmená A, B, C… sú podľa toho, ako ich vidí on. Otázka s dopisovaním má namiesto nich políčko.
 function pupilOpts() {
   var S = P.S, k = curKey(), q = P.qs[k], box = $('g-opts');
   box.innerHTML = '';
+  box.hidden = !!q.text; $('g-text').hidden = !q.text;
+  if (q.text) {
+    var inp = $('g-input'), v = typeof S.ans[k] === 'string' ? S.ans[k] : '';
+    if (inp.dataset.k !== k || document.activeElement !== inp) { inp.value = v; inp.dataset.k = k; }
+    $('g-msg').textContent = v ? t('p.ans_saved') : t('p.write');
+    return;
+  }
   S.opt[k].forEach(function (oi, pos) {
     var sel = S.ans[k] === oi;
     box.appendChild(el('li', {}, [el('button', { type: 'button', class: 'opt' + (sel ? ' sel' : ''), 'aria-pressed': sel ? 'true' : 'false', onclick: function () { pupilAnswer(oi); } },
@@ -192,6 +202,18 @@ function pupilNav() {
 }
 function pupilGo(i) { var S = P.S; if (i < 0 || i >= S.order.length) return; S.idx = i; pSave(); pupilQuestion(); }
 function pupilAnswered() { var S = P.S; return S.order.filter(function (k) { return S.ans[k] !== undefined; }).length; }
+// Písanie odpovede: ukladá sa priebežne, prázdne políčko = bez odpovede.
+function pupilType() {
+  if (P.phase !== 'test' || $('p-game').hidden) return;
+  var S = P.S, k = curKey(), inp = $('g-input');
+  if (inp.dataset.k !== k) return;
+  var v = inp.value.replace(/\s+/g, ' ').trim().slice(0, 100), had = S.ans[k] !== undefined;
+  if (v) S.ans[k] = v; else delete S.ans[k];
+  pSave();
+  $('g-msg').textContent = v ? t('p.ans_saved') : t('p.write');
+  if (had !== !!v) { pupilNav(); if (S.idx + 1 >= S.order.length) $('g-btn').classList.toggle('primary', pupilAnswered() === S.order.length); }
+  pupilMeters(); pupilQueueSave();
+}
 // Ťuknutie na možnosť ju vyberie, ťuknutie na vybranú odpoveď ju zruší.
 function pupilAnswer(oi) {
   if (P.phase !== 'test' || $('p-game').hidden) return;
@@ -402,16 +424,27 @@ async function pupilResults() {
     // v poradí, v akom ich žiak písal, a s jeho poradím možností
     var order = saved.order && saved.order.length === R.keys.length && saved.order.every(function (k) { return R.keys.indexOf(k) >= 0; }) ? saved.order : R.keys;
     order.forEach(function (k, i) {
-      var q = R.qs[k], a = R.ans[k], good = a === q.ok, opt = saved.opt && saved.opt[k] && saved.opt[k].length === q.opts.length ? saved.opt[k] : q.opts.map(function (x, j) { return j; });
+      var q = R.qs[k], a = R.ans[k], st = R.st && R.st[k] ? R.st[k] : gradeAns(q, a), good = st === 'ok';
+      var opt = saved.opt && saved.opt[k] && saved.opt[k].length === q.opts.length ? saved.opt[k] : q.opts.map(function (x, j) { return j; });
       var ul = el('ul');
+      var stText = good ? t('p.res_good') : st === 'none' ? t('p.res_none') : st === 'review' ? t('p.res_review') : t('p.res_bad');
+      if (q.text) {
+        if (st !== 'none') ul.appendChild(el('li', { class: good ? 'right' : st === 'review' ? 'rev' : 'wrong' }, [el('b', { text: '✎' }), el('span', { text: a }),
+          el('span', { class: 'why', text: good ? t('p.res_yours_ok') : st === 'review' ? t('p.res_yours_rev') : t('p.res_yours') })]));
+        if (!good) ul.appendChild(el('li', { class: 'right' }, [el('b', { text: '✓' }), el('span', { text: (q.acc || []).join(', ') }), el('span', { class: 'why', text: t('p.res_correct') })]));
+        list.appendChild(el('li', { class: 'rq ' + (good ? 'hit' : st === 'review' ? 'rev' : 'miss') }, [
+          el('div', { class: 'qq' }, [el('small', { text: t('p.question_n', { n: i + 1 }) + ' · ' + stText }), q.q]),
+          q.img ? qImage(q.img) : null, ul]));
+        return;
+      }
       opt.forEach(function (oi, pos) {
         var cls = oi === q.ok ? 'right' : oi === a ? 'wrong' : '';
         var why = oi === q.ok && oi === a ? t('p.res_yours_ok') : oi === q.ok ? t('p.res_correct') : oi === a ? t('p.res_yours') : '';
         ul.appendChild(el('li', { class: cls }, [el('b', { text: LETTERS[pos] }), el('span', { text: q.opts[oi] }), why ? el('span', { class: 'why', text: why }) : null]));
       });
       list.appendChild(el('li', { class: 'rq ' + (good ? 'hit' : 'miss') }, [
-        el('div', { class: 'qq' }, [el('small', { text: t('p.question_n', { n: i + 1 }) + ' · ' + (good ? t('p.res_good') : a === undefined ? t('p.res_none') : t('p.res_bad')) }), q.q]),
-        q.img ? el('img', { class: 'qimg', src: q.img, alt: '' }) : null, ul]));
+        el('div', { class: 'qq' }, [el('small', { text: t('p.question_n', { n: i + 1 }) + ' · ' + stText }), q.q]),
+        q.img ? qImage(q.img) : null, ul]));
     });
   }
   pShow('p-results');
@@ -431,9 +464,20 @@ function pupilReviewOver() {
   $('g-btn').onclick = function () { var S = P.S; if (S.idx + 1 < S.order.length) pupilGo(S.idx + 1); else pupilAskSubmit(); };
   $('g-flag').onclick = pupilFlag;
   $('g-submit').onclick = pupilAskSubmit;
-  // Na počítači: písmeno vyberie možnosť, šípky prepínajú otázky.
+  zoomable($('g-img'));
+  var inp = $('g-input');
+  inp.addEventListener('input', pupilType);
+  inp.addEventListener('change', pupilType);
+  // Enter: na ďalšiu otázku (pri poslednej sa klávesnica len skryje)
+  inp.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    e.preventDefault(); pupilType();
+    var S = P.S; if (S.idx + 1 < S.order.length) pupilGo(S.idx + 1); else inp.blur();
+  });
+  // Na počítači: písmeno vyberie možnosť, šípky prepínajú otázky (nie pri písaní do políčka).
   document.addEventListener('keydown', function (e) {
-    if (P.phase !== 'test' || $('p-game').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (P.phase !== 'test' || $('p-game').hidden || e.ctrlKey || e.metaKey || e.altKey || zoomOpen()) return;
+    if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     var S = P.S, k = curKey(), i = LETTERS.indexOf(String(e.key).toUpperCase());
     if (i >= 0 && i < S.opt[k].length) { pupilAnswer(S.opt[k][i]); e.preventDefault(); }
     else if (e.key === 'ArrowRight') { pupilGo(S.idx + 1); e.preventDefault(); }

@@ -1,5 +1,20 @@
 # Zmeny
 
+## 1.5 (2026-11-09) – treba vymeniť skript tabuľky
+
+- **Otázky s dopisovaním.** V hárku Otázky nechaj A–F prázdne a do stĺpca Správna napíš správnu odpoveď, viac odpovedí oddeľ
+  bodkočiarkou (`Dunaj; Danube`). Žiak dostane namiesto možností políčko (bez automatických opráv a napovedania telefónu).
+  Porovnáva sa bez ohľadu na veľké písmená, diakritiku, interpunkciu a medzery, pomlčka a lomka = medzera, desatinná čiarka = bodka.
+- **Kontrola učiteľom.** Odpoveď, ktorá sa od správnej líši o preklep (do 6 písmen 1, dlhšie 2; krátke slová a čísla nie),
+  je v hárku výsledkov označená `?` a je za 0 bodov, kým ju učiteľ nerozhodne. V aplikácii učiteľa (Prehľad upozorní, záložka Otázky)
+  sú pri každej otázke na dopísanie rôzne odpovede žiakov s počtami: **Uznať** / **Zamietnuť**, uznať sa dá aj nesprávna (✗)
+  a rozhodnutie sa dá zrušiť. Uznaná odpoveď platí pre všetkých, čo ju napísali rovnako, pripíše sa do stĺpca Správna v hárku Otázky
+  a výsledky, bunky, poznámky aj výsledky žiakov sa prepočítajú.
+- Dopisovanie je aj v poznámkach hárka výsledkov, v PDF písomkach a vo výsledkoch žiaka po uzavretí („učiteľ ešte skontroluje“).
+- **Zväčšenie obrázka.** Ťuknutie na obrázok otázky (lupa v rohu) ho otvorí na celú obrazovku: dva prsty, dvojité ťuknutie,
+  koliesko myši alebo +/−, posúvanie ťahaním, zatvorenie krížikom. Nepočíta sa to ako odchod z testu. Funguje aj vo výsledkoch.
+- V tabuľke Písomky je zo stĺpca Správna odstránený rozbaľovací zoznam A–F a hárok Návod je doplnený.
+
 ## 1.4 (2026-10-26)
 
 - **Stráž zmenšeného okna:** rozdelená obrazovka, plávajúce okno alebo zmenšený prehliadač počas testu hneď zakryje test. Ak žiak okno do 4 s nezväčší, počíta sa to ako odchod (raz za jedno zmenšenie). Otočenie telefónu ani priblíženie stránky (Ctrl +) to nespustí.

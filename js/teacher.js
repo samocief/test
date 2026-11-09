@@ -151,8 +151,10 @@ function tListToggle(open) {
   if (open) tPreview();
 }
 function qItem(q, noTag) {
-  return el('li', {}, [q.q, q.g && !noTag ? el('span', { class: 'badge g', text: q.g }) : null, q.img ? el('span', { class: 'small muted', text: ' 🖼' }) : null,
-    el('ul', { class: 'opts2' }, q.opts.map(function (o, i) { return el('li', { class: i === q.ok ? 'ok' : '', text: LETTERS[i] + ') ' + o }); }))]);
+  var opts = q.text ? [el('li', { class: 'ok', text: '✎ ' + (q.acc || []).join('; ') })]
+    : q.opts.map(function (o, i) { return el('li', { class: i === q.ok ? 'ok' : '', text: LETTERS[i] + ') ' + o }); });
+  return el('li', {}, [q.q, q.g && !noTag ? el('span', { class: 'badge g', text: q.g }) : null, q.text ? el('span', { class: 'badge g', text: t('t.text_badge') }) : null,
+    q.img ? el('span', { class: 'small muted', text: ' 🖼' }) : null, el('ul', { class: 'opts2' }, opts)]);
 }
 function tPreview() {
   var box = $('list-box'), b = bankTest(), plan = tPlan();
@@ -282,7 +284,7 @@ function keysOf(r) { return r && r.keys ? r.keys : T.cur.d.test.keys; }
 function resScore(r) {
   var pack = T.cur.pack, keys = keysOf(r);
   if (!pack) { var m = /(\d+)\s*\/\s*(\d+)/.exec(r.points || ''); return { ok: m ? +m[1] : null, n: keys.length, pct: typeof r.pct === 'number' ? r.pct : null }; }
-  var ok = 0; keys.forEach(function (k) { var q = pack.q[k]; if (q && r.ans[k] === q.ok) ok++; });
+  var ok = 0; keys.forEach(function (k) { if (gradeAns(pack.q[k], r.ans[k]) === 'ok') ok++; });
   return { ok: ok, n: keys.length, pct: Math.max(0, (keys.length ? ok / keys.length : 0) - (r.leaves > 0 ? T.cur.d.penalty || 0 : 0)) };
 }
 // Posledný odovzdaný pokus každého žiaka. res = všetky odovzdané (aj učiteľ), stat = bez učiteľa, absent = neprítomní.
@@ -386,9 +388,19 @@ function tOverview() {
   var heads = [t('t.col_pupil'), t('t.col_status')].concat(T.showRes ? [t('t.col_result')] : []).concat(anyFlag ? [t('t.col_flag')] : []).concat(['']);
   var box = $('over-table'); box.innerHTML = '';
   box.appendChild(el('table', {}, [el('thead', {}, [el('tr', {}, heads.map(function (h, i) { return el('th', { class: T.showRes && i === 2 ? 'num' : '', text: h }); }))]), tb]));
+  var rv = reviewCount();
+  $('over-review').hidden = !rv.n;
+  if (rv.n) $('over-review-t').textContent = t('t.review_wait', { n: rv.n });
   var avg = classAvg();
   $('avg-pct').textContent = avg === null ? '–' : fmtPct(avg);
   $('avg-note').textContent = avg === null ? t('t.no_results') : t('t.avg_note', { pct: Math.round((d.penalty || 0) * 100) });
+}
+// Odpovede na dopísanie, ktoré čakajú na kontrolu učiteľom (bez učiteľa).
+function reviewCount() {
+  var pack = T.cur.pack, n = 0;
+  if (!pack) return { n: 0 };
+  T.cur.stat.forEach(function (r) { keysOf(r).forEach(function (k) { var q = pack.q[k]; if (q && q.text && gradeAns(q, r.ans[k]) === 'review') n++; }); });
+  return { n: n };
 }
 async function tAbsent(p, on, btn) {
   if (btn) btn.disabled = true;
@@ -432,8 +444,11 @@ function tQs() {
   var x = T.cur.d.test, pack = T.cur.pack, gate = x.state !== 'closed' && !T.qsForce;
   $('qs-gate').hidden = !gate; $('qs-body').hidden = gate;
   if (gate || !pack) return;
+  $('qs-text-hint').hidden = !x.keys.some(function (k) { return pack.q[k] && pack.q[k].text; });
   var items = x.keys.map(function (k) {
-    var q = pack.q[k], cnt = q.opts.map(function () { return 0; }), none = 0, n = 0, ok = 0;
+    var q = pack.q[k];
+    if (q.text) return textItem(k, q);
+    var cnt = q.opts.map(function () { return 0; }), none = 0, n = 0, ok = 0;
     T.cur.stat.forEach(function (r) {
       if (keysOf(r).indexOf(k) < 0) return;
       n++; var a = r.ans[k];
@@ -441,9 +456,11 @@ function tQs() {
     });
     return { k: k, q: q, cnt: cnt, none: none, n: n, ok: ok, p: n ? ok / n : null };
   });
-  items.sort(function (a, b) { return (a.p === null ? 2 : a.p) - (b.p === null ? 2 : b.p); });
+  // najprv otázky s odpoveďami na kontrolu, potom od najťažšej
+  items.sort(function (a, b) { return (b.rev ? 1 : 0) - (a.rev ? 1 : 0) || (a.p === null ? 2 : a.p) - (b.p === null ? 2 : b.p); });
   var box = $('qs-list'); box.innerHTML = '';
   items.forEach(function (it) {
+    if (it.q.text) { box.appendChild(textCard(it)); return; }
     var max = Math.max(1, it.n), rows = it.q.opts.map(function (o, i) {
       var good = i === it.q.ok;
       var letter = good ? el('b', { text: LETTERS[i] }) : el('button', { type: 'button', text: LETTERS[i], title: t('t.fix_hint'), onclick: function () { tFixKey(it, i); } });
@@ -455,6 +472,61 @@ function tQs() {
       el('div', { class: 'small muted', text: t('t.qs_count', { n: it.n }) }),
       el('div', { class: 'dist' }, rows)]));
   });
+}
+// Otázka s dopisovaním: rôzne odpovede žiakov (rovnaké po úprave sa zlúčia) s počtom a hodnotením.
+function textItem(k, q) {
+  var groups = {}, none = 0, n = 0, ok = 0, rev = 0;
+  T.cur.stat.forEach(function (r) {
+    if (keysOf(r).indexOf(k) < 0) return;
+    n++;
+    var a = r.ans[k], st = gradeAns(q, a);
+    if (st === 'none') { none++; return; }
+    if (st === 'ok') ok++;
+    if (st === 'review') rev++;
+    var key = ansKey(a), g = groups[key] = groups[key] || { key: key, n: 0, forms: {}, st: st };
+    g.n++; g.forms[a] = (g.forms[a] || 0) + 1;
+  });
+  var order = { review: 0, bad: 1, ok: 2 }, list = Object.keys(groups).map(function (key) {
+    var g = groups[key], forms = Object.keys(g.forms).sort(function (a, b) { return g.forms[b] - g.forms[a]; });
+    g.raw = forms[0]; g.more = forms.slice(1);
+    g.added = (q.add || []).some(function (x) { return ansKey(x) === key; });
+    g.rejected = (q.rej || []).indexOf(key) >= 0;
+    return g;
+  }).sort(function (a, b) { return order[a.st] - order[b.st] || b.n - a.n; });
+  return { k: k, q: q, n: n, ok: ok, none: none, rev: rev, list: list, p: n ? ok / n : null };
+}
+function textCard(it) {
+  var max = Math.max(1, it.n), q = it.q;
+  var act = function (g, op, label, cls) { return el('button', { type: 'button', class: 'mini' + (cls ? ' ' + cls : ''), text: label, onclick: function () { tTextAns(it, g, op, this); } }); };
+  var rows = it.list.map(function (g) {
+    var icon = g.st === 'ok' ? '✓' : g.st === 'review' ? '?' : '✗', btns = [];
+    if (g.st === 'review') { btns.push(act(g, 'accept', t('t.acc_yes'), 'primary')); btns.push(act(g, 'reject', t('t.acc_no'))); }
+    else if (g.st === 'bad') { btns.push(g.rejected ? act(g, 'reset', t('t.acc_undo')) : null); btns.push(act(g, 'accept', t('t.acc_yes'))); }
+    else if (g.added) btns.push(act(g, 'reset', t('t.acc_undo')));
+    var label = g.raw + (g.more.length ? ' (' + t('t.acc_forms', { forms: g.more.slice(0, 3).join(', ') + (g.more.length > 3 ? ', …' : '') }) + ')' : '');
+    return el('div', { class: 'drow trow ' + g.st }, [el('span', { class: 'ic', text: icon }), el('span', { class: 'tx', text: label }),
+      el('div', { class: 'bar' }, [el('i', { style: 'width:' + (g.n / max * 100) + '%' })]), el('span', { class: 'n', text: String(g.n) }), el('span', { class: 'act' }, btns)]);
+  });
+  if (it.none) rows.push(el('div', { class: 'drow trow' }, [el('span', { text: '–' }), el('span', { class: 'tx muted', text: t('t.qs_none') }), el('div', { class: 'bar' }, [el('i', { style: 'width:' + (it.none / max * 100) + '%' })]), el('span', { class: 'n', text: String(it.none) }), el('span')]));
+  if (!rows.length) rows.push(el('p', { class: 'small muted', text: t('t.no_results') }));
+  return el('div', { class: 'qs' + (it.rev ? ' hasrev' : '') }, [
+    el('div', { class: 'top row' }, [el('div', { class: 'qq' }, [el('small', { text: qTag(it.k) }), q.q, el('span', { class: 'badge g', text: t('t.text_badge') })]), el('div', { class: 'pc', text: it.p === null ? '–' : fmtPct(it.p) })]),
+    el('div', { class: 'small muted' }, [t('t.qs_count', { n: it.n }), ' · ', t('t.acc_list'), ' ', el('b', { class: 'ok', text: ansAccepted(q).join('; ') })]
+      .concat(it.rev ? [' · ', el('b', { class: 'bad', text: t('t.rev_n', { n: it.rev }) })] : [])),
+    el('div', { class: 'dist' }, rows)]);
+}
+// Uznať / zamietnuť / zrušiť rozhodnutie pri jednej odpovedi (všetci žiaci, ktorí ju napísali rovnako po úprave).
+async function tTextAns(it, g, op, btn) {
+  document.querySelectorAll('#qs-list .trow button').forEach(function (b) { b.disabled = true; });
+  tStatus('qs-msg', t('common.loading'));
+  try {
+    var r = await api('tTextAns', A({ t: T.cur.id, q: it.k, txt: g.raw, op: op }));
+    if (r.q) T.cur.pack.q[it.k] = r.q;
+    tPrepResults(); tQs();
+    var msg = t(op === 'accept' ? 't.acc_done' : op === 'reject' ? 't.rej_done' : 't.undo_done', { a: g.raw, n: r.n || 0 });
+    if (op === 'accept') msg += ' ' + t(r.sheet ? 't.acc_sheet' : 't.acc_nosheet');
+    tStatus('qs-msg', msg, 'ok');
+  } catch (e) { tStatus('qs-msg', errText(e), 'bad'); tQs(); }
 }
 async function tFixKey(it, i) {
   if (!confirm(t('t.fix_confirm', { q: it.q.q, l: LETTERS[i], opt: it.q.opts[i] }))) return;
@@ -479,6 +551,7 @@ async function tFixKey(it, i) {
   on('over-copy', tCopyResults);
   on('over-export', tExportAll);
   on('qs-force', function () { T.qsForce = true; tQs(); });
+  on('over-review-b', function () { tSub('qs'); });
   on('test-toggle', tToggleState);
   on('test-reveal', tSetReveal, 'onchange');
   on('sub-over-b', function () { tSub('over'); });

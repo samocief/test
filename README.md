@@ -1,6 +1,6 @@
 # Písomky
 
-Online písomky s možnosťami A–F pre žiakov na telefóne. Otázky, žiaci aj výsledky sú v Google Tabuľke učiteľa,
+Online písomky s možnosťami A–F aj s dopisovaním krátkej odpovede pre žiakov na telefóne. Otázky, žiaci aj výsledky sú v Google Tabuľke učiteľa,
 aplikácia beží na GitHub Pages: <https://samocief.github.io/test/>.
 
 Funguje rovnako ako písomka v [Slepej mape](https://github.com/samocief/blindmap): žiaci naskenujú QR kód, vyberú svoje meno,
@@ -11,9 +11,9 @@ Prvý odchod z testu (iná karta, iná aplikácia, zamknutie telefónu) strhne 1
 
 | Hárok | Kto ho píše | Obsah |
 |---|---|---|
-| **Otázky** | učiteľ | Test, Skupina (A/B/prázdne = obe), Otázka, A–F (aspoň dve), Správna (písmeno), Obrázok (odkaz), Aktívna |
+| **Otázky** | učiteľ | Test, Skupina (A/B/prázdne = obe), Otázka, A–F (aspoň dve, pri dopisovaní prázdne), Správna (písmeno alebo odpovede oddelené `;`), Obrázok (odkaz), Aktívna |
 | **Žiaci** | učiteľ | Trieda, Meno („Priezvisko Meno“), Skupina (A/B), voliteľne Aktívny |
-| Testy, Res_…, _balíky | skript | spustené písomky, výsledky (písmeno odpovede, ✓ / ✗), snímka otázok |
+| Testy, Res_…, _balíky | skript | spustené písomky, výsledky (písmeno alebo napísaná odpoveď, ✓ / ✗ / ? na kontrolu), snímka otázok |
 
 - Všetky riadky s rovnakým názvom v stĺpci **Test** tvoria jeden test.
 - **Skupiny:** ak test má otázky pre A aj B a trieda má v hárku Žiaci žiakov v A aj B, každá skupina píše svoje otázky
@@ -23,6 +23,10 @@ Prvý odchod z testu (iná karta, iná aplikácia, zamknutie telefónu) strhne 1
 - Spustený test má vlastnú snímku otázok. Zmeny v hárku Otázky sa ho netýkajú; chybný kľúč sa opraví v aplikácii učiteľa
   (záložka Otázky, ťuknutím na písmeno správnej možnosti) a výsledky sa prepočítajú.
 - Obrázok k otázke: odkaz na súbor na Disku zdieľaný „Každý, kto má odkaz“, alebo iný verejný odkaz (https).
+  Obrázok vložený priamo do bunky skript neprečíta. Žiak si obrázok ťuknutím otvorí na celú obrazovku a môže ho zväčšiť.
+- **Otázka s dopisovaním:** A–F prázdne, v stĺpci Správna jedna alebo viac správnych odpovedí oddelených bodkočiarkou (`Dunaj; Danube`).
+  Na veľkých písmenách, diakritike, interpunkcii a medzerách nezáleží. Odpoveď s preklepom je „na kontrolu“ (0 bodov, kým ju učiteľ
+  v záložke Otázky neuzná). Uznaná sa pripíše do stĺpca Správna a výsledky sa prepočítajú.
 
 ## Nasadenie skriptu (raz)
 

@@ -15,8 +15,12 @@
  *
  * Od 1.3: id testu „trieda_MM-dd_HH:mm“ (napr. 9A_10-25_19:49), hárok výsledkov „Res_<id>“ hneď za hárkom Testy, najnovší vľavo.
  * Písomky žiakov sa dajú uložiť ako PDF na Disk (priečinok „Písomky – žiaci“ vedľa tabuľky).
+ *
+ * Od 1.5: otázky s dopisovaním (prázdne stĺpce A–F, v stĺpci Správna jedna alebo viac odpovedí oddelených bodkočiarkou).
+ * Porovnáva sa bez ohľadu na veľké písmená, diakritiku a interpunkciu. Odpoveď s preklepom ide učiteľovi na kontrolu
+ * (záložka Otázky v aplikácii učiteľa): uznaná sa pridá do stĺpca Správna a výsledky sa prepočítajú.
  */
-const VERSION = '1.3';
+const VERSION = '1.5';
 const APP_URL = 'https://samocief.github.io/test/';
 const APP_NAME = 'Písomky';
 
@@ -35,6 +39,7 @@ const STATE = { ready: 'pripravený', open: 'otvorený', closed: 'uzavretý' };
 const REVEAL = { all: 'odpovede', pct: 'len výsledok' };
 const TEACHER = 'Učiteľ';                        // jedno meno navyše v každej triede, nepočíta sa do priemeru
 const ABSENT = 'neprítomný';
+const TEXT_MAX = 100;                            // najdlhšia odpoveď na dopísanie (znaky)
 const DOZOR_OK = { tTest: 1, tSetTest: 1, tUnlock: 1, tAbsent: 1 };   // čo smie odkaz pre dozor (len jeden test)
 const WHY = { none: 'bez odpovede', ended: 'ukončené' };
 const CHUNK = 40000;
@@ -52,6 +57,53 @@ function num_(v) { const n = typeof v === 'number' ? v : parseFloat(String(v).re
 function normName(s) {
   return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
     .replace(/[’'`´.]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+/* ---------- otázky s dopisovaním: porovnanie odpovedí (rovnaký kód je v Code.gs aj v js/core.js) ---------- */
+// Odpoveď aj správne odpovede sa porovnávajú upravené: malé písmená, bez diakritiky a interpunkcie, pomlčka a lomka ako medzera,
+// desatinná čiarka ako bodka. Medzery sa pri porovnaní vynechajú („Česko-Slovensko“ = „ceskoslovensko“).
+var ANS_MAP = { 'ł': 'l', 'ø': 'o', 'đ': 'd', 'ß': 'ss', 'æ': 'ae', 'œ': 'oe', 'ı': 'i' };
+function ansNorm(s) {
+  return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[łøđßæœı]/g, function (c) { return ANS_MAP[c]; })
+    .replace(/(\d)[,.](?=\d)/g, '$1\u0001')
+    .replace(/[-‐-―−_\/\\]/g, ' ')
+    .replace(/[^\p{L}\p{N}\s\u0001]/gu, '')
+    .replace(/\u0001/g, '.').replace(/\s+/g, ' ').trim();
+}
+function ansKey(s) { return ansNorm(s).replace(/ /g, ''); }
+// Počet preklepov medzi dvoma textami (vynechané, pridané, iné alebo prehodené susedné písmeno).
+function ansDist(a, b) {
+  var n = a.length, m = b.length, d = [], i, j;
+  if (!n || !m) return n + m;
+  for (i = 0; i <= n; i++) d[i] = [i];
+  for (j = 0; j <= m; j++) d[0][j] = j;
+  for (i = 1; i <= n; i++) for (j = 1; j <= m; j++) {
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+  }
+  return d[n][m];
+}
+// Koľko preklepov ešte pošle odpoveď na kontrolu učiteľovi: krátke slová a čísla žiadny, do 6 písmen jeden, dlhšie dva.
+function ansTol(key) { return key.length < 3 || /^[\d.]+$/.test(key) ? 0 : key.length <= 6 ? 1 : 2; }
+// Správne odpovede: zo stĺpca Správna (acc) a uznané učiteľom (add). Zamietnuté učiteľom (rej) už na kontrolu nejdú.
+function ansAccepted(q) { return (q.acc || []).concat(q.add || []); }
+// Hodnotenie odpovede: 'none' bez odpovede, 'ok' správne, 'review' na kontrolu (líši sa o preklep), 'bad' nesprávne.
+function gradeText(q, a) {
+  var k = ansKey(a), acc = ansAccepted(q), near = false;
+  if (!k) return 'none';
+  for (var i = 0; i < acc.length; i++) {
+    var c = ansKey(acc[i]);
+    if (!c) continue;
+    if (c === k) return 'ok';
+    if (ansDist(k, c) <= ansTol(c)) near = true;
+  }
+  return near && (q.rej || []).indexOf(k) < 0 ? 'review' : 'bad';
+}
+function gradeAns(q, a) {
+  if (!q) return 'none';
+  if (q.text) return typeof a === 'string' ? gradeText(q, a) : 'none';
+  if (typeof a !== 'number') return 'none';
+  return a === q.ok ? 'ok' : 'bad';
 }
 function yes_(v) { const n = normName(v); return !(n === 'nie' || n === 'no' || n === 'false' || n === '0' || n === 'n'); }
 function fail_(code, msg) { throw new Error('E:' + code + (msg ? '|' + msg : '')); }
@@ -145,7 +197,7 @@ function out_(obj) { return ContentService.createTextOutput(JSON.stringify(obj))
 const ROUTES = {
   ping: function () { return { ok: true, v: VERSION }; },
   pupilInit: pupilInit_, pupilLogin: pupilLogin_, pupilBegin: pupilBegin_, pupilSave: pupilSave_, pupilEvent: pupilEvent_, pupilSubmit: pupilSubmit_, pupilState: pupilState_, pupilResult: pupilResult_,
-  tInit: tInit_, tCreateTest: tCreateTest_, tTest: tTest_, tSetTest: tSetTest_, tUnlock: tUnlock_, tAbsent: tAbsent_, tFixKey: tFixKey_, tExportPupil: tExportPupil_
+  tInit: tInit_, tCreateTest: tCreateTest_, tTest: tTest_, tSetTest: tSetTest_, tUnlock: tUnlock_, tAbsent: tAbsent_, tFixKey: tFixKey_, tTextAns: tTextAns_, tExportPupil: tExportPupil_
 };
 function handle_(req) {
   try {
@@ -188,7 +240,7 @@ function newTeacherKey() {
 function checkQuestions() {
   ensureBaseSheets_();
   const b = readBank_(), ui = SpreadsheetApp.getUi();
-  const lines = b.tests.map(function (x) { return '• ' + x.name + ': ' + x.n + ' otázok' + (x.A || x.B ? ' (len A: ' + x.A + ', len B: ' + x.B + ', obe: ' + x.both + ')' : ''); });
+  const lines = b.tests.map(function (x) { return '• ' + x.name + ': ' + x.n + ' otázok' + (x.txt ? ', z toho na dopísanie ' + x.txt : '') + (x.A || x.B ? ' (len A: ' + x.A + ', len B: ' + x.B + ', obe: ' + x.both + ')' : ''); });
   const errs = b.errors.slice(0, 25).map(function (e) { return '• riadok ' + e.row + ': ' + e.msg; });
   ui.alert('Kontrola otázok', (lines.length ? lines.join('\n') : 'V hárku Otázky zatiaľ nie je žiadna aktívna otázka.') +
     (errs.length ? '\n\nTieto riadky sa do testu nedostanú:\n' + errs.join('\n') + (b.errors.length > 25 ? '\n…' : '') : '\n\nBez chýb.'), ui.ButtonSet.OK);
@@ -270,6 +322,7 @@ function imageUrl_(v) {
   return /^https:\/\//.test(s) ? s : '';
 }
 // Hárok Otázky: Test | Skupina (A, B alebo prázdne = obe) | Otázka | A … F (možnosti, aspoň dve) | Správna (písmeno) | Obrázok | Aktívna.
+// Otázka s dopisovaním: A … F prázdne, v stĺpci Správna správne odpovede oddelené bodkočiarkou („Dunaj; Danube“).
 // Vráti testy (podľa stĺpca Test) s otázkami a zoznam chýb v riadkoch. Kľúč otázky je číslo riadku v hárku.
 function readBank_() {
   const sh = sheetByNames_(SH.questions);
@@ -289,23 +342,40 @@ function readBank_() {
     // možnosti idú za sebou: prázdne políčko uprostred sa preskočí, písmená sa posunú
     const opts = [], map = {};
     cO.forEach(function (c, j) { if (c >= 0 && s_(row[c]) !== '') { map[LETTERS[j]] = opts.length; opts.push(s_(row[c])); } });
-    if (opts.length < 2) { errors.push({ row: r, msg: 'menej ako dve možnosti (' + name + ')' }); return; }
-    const kl = normName(row[cK]).toUpperCase().replace(/\s/g, '');
-    if (!kl) { errors.push({ row: r, msg: 'chýba správna odpoveď (' + name + ')' }); return; }
-    if (map[kl] === undefined) { errors.push({ row: r, msg: 'správna odpoveď „' + s_(row[cK]) + '“ nie je medzi možnosťami (' + name + ')' }); return; }
     const gn = cG >= 0 ? normName(row[cG]).split(' ').pop() : '';
     const g = gn === 'a' ? 'A' : gn === 'b' ? 'B' : '';
+    const img = cI >= 0 ? imageUrl_(row[cI]) : '';
+    let item;
+    if (!opts.length) {
+      // otázka s dopisovaním
+      const acc = splitAcc_(row[cK]);
+      if (!acc.length) { errors.push({ row: r, msg: 'chýbajú možnosti A–F aj správna odpoveď na dopísanie (' + name + ')' }); return; }
+      if (acc.length === 1 && /^[A-F]$/i.test(acc[0])) { errors.push({ row: r, msg: 'správna odpoveď je písmeno „' + acc[0] + '“, ale chýbajú možnosti A–F (' + name + ')' }); return; }
+      item = { k: 'r' + r, row: r, g: g, q: text, opts: [], ok: null, text: 1, acc: acc, img: img };
+    } else {
+      if (opts.length < 2) { errors.push({ row: r, msg: 'menej ako dve možnosti (' + name + ')' }); return; }
+      const kl = normName(row[cK]).toUpperCase().replace(/\s/g, '');
+      if (!kl) { errors.push({ row: r, msg: 'chýba správna odpoveď (' + name + ')' }); return; }
+      if (map[kl] === undefined) { errors.push({ row: r, msg: 'správna odpoveď „' + s_(row[cK]) + '“ nie je medzi možnosťami (' + name + ')' }); return; }
+      item = { k: 'r' + r, row: r, g: g, q: text, opts: opts, ok: map[kl], img: img };
+    }
     const key = normName(name);
     if (!tests[key]) { tests[key] = { name: name, qs: [] }; order.push(key); }
-    tests[key].qs.push({ k: 'r' + r, row: r, g: g, q: text, opts: opts, ok: map[kl], img: cI >= 0 ? imageUrl_(row[cI]) : '' });
+    tests[key].qs.push(item);
   });
   return {
     errors: errors,
     tests: order.map(function (k) {
       const x = tests[k], A = x.qs.filter(function (q) { return q.g === 'A'; }).length, B = x.qs.filter(function (q) { return q.g === 'B'; }).length;
-      return { name: x.name, n: x.qs.length, A: A, B: B, both: x.qs.length - A - B, qs: x.qs };
+      return { name: x.name, n: x.qs.length, A: A, B: B, both: x.qs.length - A - B, txt: x.qs.filter(function (q) { return q.text; }).length, qs: x.qs };
     })
   };
+}
+// Správne odpovede na dopísanie zo stĺpca Správna: oddelené bodkočiarkou, prázdne a rovnaké (po úprave) sa vynechajú.
+function splitAcc_(v) {
+  const out = [], seen = {};
+  s_(v).split(';').forEach(function (x) { x = x.replace(/\s+/g, ' ').trim(); const k = ansKey(x); if (k && !seen[k]) { seen[k] = 1; out.push(x); } });
+  return out;
 }
 
 /* ---------- žiaci ---------- */
@@ -429,7 +499,7 @@ function loadPack_(id) {
 // Otázky pre žiaka: bez správnej odpovede.
 function publicQs_(pack, keys) {
   const out = {};
-  keys.forEach(function (k) { const q = pack.q[k]; if (q) out[k] = { q: q.q, opts: q.opts, img: q.img || '' }; });
+  keys.forEach(function (k) { const q = pack.q[k]; if (q) out[k] = q.text ? { q: q.q, opts: [], text: 1, img: q.img || '' } : { q: q.q, opts: q.opts, img: q.img || '' }; });
   return out;
 }
 
@@ -492,27 +562,38 @@ function createResultsSheet_(test, pack) {
   return sh;
 }
 function resultsSheet_(test, pack) { return resultsGet_(test.id) || createResultsSheet_(test, pack || loadPack_(test.id)); }
-// Text do bunky otázky: písmeno odpovede (podľa hárka Otázky) so značkou správne/nesprávne.
+// Text do bunky otázky: písmeno odpovede (podľa hárka Otázky) alebo napísaný text so značkou ✓ správne, ✗ nesprávne, ? na kontrolu.
+const MARK = { ok: ' ✓', bad: ' ✗', review: ' ?' };
 function cellFor_(q, a, ended) {
-  if (a === null || a === undefined) return ended ? WHY.ended : WHY.none;
-  return LETTERS[a] + (a === q.ok ? ' ✓' : ' ✗');
+  const st = gradeAns(q, a);
+  if (st === 'none') return ended ? WHY.ended : WHY.none;
+  return (q.text ? (a.length > 30 ? a.slice(0, 29) + '…' : a) : LETTERS[a]) + MARK[st];
 }
 // Poznámky k bunkám: celé znenie odpovede žiaka a správnej odpovede (písmená podľa hárka Otázky).
 function optText_(q, i) { return LETTERS[i] + ') ' + q.opts[i]; }
+function accText_(q) { return ansAccepted(q).join('; '); }
 function noteFor_(q, a) {
   if (!q) return '';
+  const st = gradeAns(q, a);
+  if (q.text) {
+    const ok = 'Správne: ' + accText_(q);
+    if (st === 'none') return 'Bez odpovede\n' + ok;
+    return st === 'ok' ? 'Napísal: ' + a + ' ✓' : 'Napísal: ' + a + (st === 'review' ? ' (na kontrolu)' : '') + '\n' + ok;
+  }
   const ok = 'Správne: ' + optText_(q, q.ok);
-  if (a === null || a === undefined) return 'Bez odpovede\n' + ok;
-  return a === q.ok ? 'Zvolil: ' + optText_(q, a) + ' ✓' : 'Zvolil: ' + optText_(q, a) + '\n' + ok;
+  if (st === 'none') return 'Bez odpovede\n' + ok;
+  return st === 'ok' ? 'Zvolil: ' + optText_(q, a) + ' ✓' : 'Zvolil: ' + optText_(q, a) + '\n' + ok;
 }
 function headNote_(q) {
   if (!q) return '';
+  if (q.text) return q.q + '\n\nNa dopísanie. Správne: ' + accText_(q);
   return q.q + '\n\n' + q.opts.map(function (o, i) { return LETTERS[i] + ') ' + o + (i === q.ok ? '  ✓' : ''); }).join('\n');
 }
 // Body a percentá: správne odpovede / počet otázok žiaka, za prvý odchod mínus LEAVE_PENALTY (najmenej 0).
+// Odpoveď na kontrolu je za 0 bodov, kým ju učiteľ neuzná.
 function scoreOf_(pack, keys, ans, leaves) {
   let ok = 0;
-  keys.forEach(function (k) { const q = pack.q[k]; if (q && ans[k] === q.ok) ok++; });
+  keys.forEach(function (k) { if (gradeAns(pack.q[k], ans[k]) === 'ok') ok++; });
   const p = keys.length ? ok / keys.length : 0;
   return { ok: ok, n: keys.length, pct: Math.max(0, p - (leaves > 0 ? LEAVE_PENALTY : 0)) };
 }
@@ -570,12 +651,20 @@ function progKey_(testId, pupilId) { return 'G1_' + testId + '_' + Utilities.bas
 function progGet_(testId, pupilId) { try { return JSON.parse(cache_().get(progKey_(testId, pupilId)) || 'null'); } catch (e) { return null; } }
 function progPut_(testId, pupilId, p) { try { cache_().put(progKey_(testId, pupilId), JSON.stringify(p), 21600); } catch (e) { /* len záloha */ } }
 function progDel_(testId, pupilId) { try { cache_().remove(progKey_(testId, pupilId)); } catch (e) { /* nevadí */ } }
-// Odpovede z aplikácie: {kľúč otázky: poradové číslo možnosti v hárku (0 = A)} len pre otázky žiakovej skupiny.
+// Odpovede z aplikácie: {kľúč otázky: poradové číslo možnosti v hárku (0 = A) alebo napísaný text} len pre otázky žiakovej skupiny.
+// Bez balíka (priebežné ukladanie) sa prijme číslo aj text.
 function cleanAns_(ans, keys, pack) {
   const out = {};
   if (!ans || typeof ans !== 'object') return out;
   keys.forEach(function (k) {
     const a = ans[k], q = pack && pack.q[k];
+    if (typeof a === 'string') {
+      if (q && !q.text) return;
+      const s = a.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, TEXT_MAX);
+      if (s) out[k] = s;
+      return;
+    }
+    if (q && q.text) return;
     if (typeof a === 'number' && a >= 0 && a < LETTERS.length && Math.floor(a) === a && (!q || a < q.opts.length)) out[k] = a;
   });
   return out;
@@ -721,8 +810,12 @@ function pupilResult_(req) {
   const out = { name: mine.name, cls: test.cls, title: test.title, sent: mine.sent, group: mine.group, ok: sc.ok, n: sc.n, pct: sc.pct, leaves: mine.leaves, penalty: LEAVE_PENALTY,
     ended: mine.ended, reveal: test.reveal, left: left };
   if (test.reveal === 'all') {
-    out.keys = mine.keys; out.ans = mine.ans; out.qs = {};
-    mine.keys.forEach(function (k) { const q = pack.q[k]; if (q) out.qs[k] = { q: q.q, opts: q.opts, img: q.img || '', ok: q.ok }; });
+    out.keys = mine.keys; out.ans = mine.ans; out.qs = {}; out.st = {};
+    mine.keys.forEach(function (k) {
+      const q = pack.q[k]; if (!q) return;
+      out.qs[k] = q.text ? { q: q.q, opts: [], text: 1, acc: ansAccepted(q), img: q.img || '' } : { q: q.q, opts: q.opts, img: q.img || '', ok: q.ok };
+      out.st[k] = gradeAns(q, mine.ans[k]);
+    });
   }
   return out;
 }
@@ -811,17 +904,24 @@ function pupilSheetHtml_(test, pack, r) {
     '.meta{color:#56666a;font-size:9.5pt;margin-bottom:10pt}.score{font-size:13pt;font-weight:bold;margin:6pt 0 12pt}' +
     '.q{border-top:1px solid #c9d3cd;padding:7pt 0;page-break-inside:avoid}.qt{font-weight:bold;margin-bottom:4pt}' +
     '.tag{font-weight:normal;font-size:9pt;padding:1pt 5pt;border-radius:3pt;margin-left:6pt}.ok{background:#dcefe2;color:#1d6b38}.bad{background:#f7dede;color:#9c2a2a}.none{background:#eee;color:#56666a}' +
-    '.o{margin:1.5pt 0 1.5pt 10pt}.o.right{color:#1d6b38;font-weight:bold}.o.wrong{color:#9c2a2a;text-decoration:line-through}' +
+    '.rev{background:#fbefd0;color:#8a5a00}.o{margin:1.5pt 0 1.5pt 10pt}.o.right{color:#1d6b38;font-weight:bold}.o.wrong{color:#9c2a2a;text-decoration:line-through}' +
     '.note{color:#56666a;font-size:9pt;margin-top:10pt}img{max-width:300pt;max-height:180pt;margin:3pt 0}</style></head><body>';
   html += '<h1>' + h_(r.name) + '</h1><div class="meta">' + h_([test.title, 'trieda ' + test.cls, r.group ? 'skupina ' + r.group : '', 'odovzdané ' + r.sent].filter(String).join(' · ')) + '</div>';
   html += '<div class="score">Výsledok: ' + Math.round(sc.pct * 100) + ' % (' + sc.ok + ' z ' + sc.n + ')' +
     (r.leaves > 0 ? ' <span style="font-weight:normal;font-size:10pt">· za odchod z testu −' + Math.round(LEAVE_PENALTY * 100) + ' %</span>' : '') + '</div>';
   r.keys.forEach(function (k, i) {
     const q = pack.q[k]; if (!q) return;
-    const a = r.ans[k], has = a !== undefined && a !== null;
-    const tag = !has ? '<span class="tag none">bez odpovede</span>' : a === q.ok ? '<span class="tag ok">správne</span>' : '<span class="tag bad">nesprávne</span>';
+    const a = r.ans[k], st = gradeAns(q, a);
+    const tag = { none: '<span class="tag none">bez odpovede</span>', ok: '<span class="tag ok">správne</span>', bad: '<span class="tag bad">nesprávne</span>',
+      review: '<span class="tag rev">na kontrolu</span>' }[st];
     const img = q.img ? imgData_(q.img) : '';
     html += '<div class="q"><div class="qt">' + (i + 1) + '. ' + h_(q.q) + tag + '</div>' + (img ? '<img src="' + img + '">' : '');
+    if (q.text) {
+      if (st !== 'none') html += '<div class="o ' + (st === 'ok' ? 'right' : st === 'bad' ? 'wrong' : '') + '">Odpoveď žiaka: ' + h_(a) + (st === 'ok' ? ' ✓' : st === 'review' ? ' (na kontrolu)' : ' ✗') + '</div>';
+      if (st !== 'ok') html += '<div class="o right">Správne: ' + h_(accText_(q)) + '</div>';
+      html += '</div>';
+      return;
+    }
     q.opts.forEach(function (o, j) {
       const cls = j === q.ok ? 'right' : j === a ? 'wrong' : '';
       const mark = j === q.ok && j === a ? ' ✓ (odpoveď žiaka)' : j === q.ok ? ' ✓ správna' : j === a ? ' ✗ (odpoveď žiaka)' : '';
@@ -876,7 +976,7 @@ function tCreateTest_(req) {
   if (!keysA.length) fail_('no_questions', bank.name);
   const total = Math.max(1, Math.min(240, Math.round(Number(cfg.total) || 10)));
   const pack = { v: 1, bank: bank.name, q: {} };
-  bank.qs.forEach(function (q) { if (keysA.indexOf(q.k) >= 0 || keysB.indexOf(q.k) >= 0) pack.q[q.k] = { q: q.q, opts: q.opts, ok: q.ok, img: q.img, g: q.g, row: q.row }; });
+  bank.qs.forEach(function (q) { if (keysA.indexOf(q.k) >= 0 || keysB.indexOf(q.k) >= 0) pack.q[q.k] = q.text ? { q: q.q, opts: [], ok: null, text: 1, acc: q.acc, add: [], rej: [], img: q.img, g: q.g, row: q.row } : { q: q.q, opts: q.opts, ok: q.ok, img: q.img, g: q.g, row: q.row }; });
   return withLock_(function () {
     const t = testsTable_();
     // id: trieda_mesiac-deň_hodina:minúta, napr. 9A_10-25_19:49 (pri zhode sa pridá písmeno: 9A_10-25_19:49a)
@@ -945,25 +1045,77 @@ function tFixKey_(req) {
   return withLock_(function () {
     const pack = loadPack_(test.id), q = pack.q[k];
     if (!q || !(ok >= 0 && ok < q.opts.length)) fail_('bad_request');
+    if (q.text) fail_('bad_request');
     q.ok = ok;
     savePack_(test.id, pack);
-    const sh = resultsGet_(test.id);
-    let n = 0;
-    if (sh && sh.getLastRow() > 1) {
-      const tb = tableOf_(sh), cR = tb.need('vysledok'), cB = tb.need('body'), ci = cB + 1 + test.keys.indexOf(k);
-      const rng = sh.getRange(2, 1, sh.getLastRow() - 1, tb.head.length), vals = rng.getValues();
-      readResults_(test).forEach(function (r) {
-        if (r.absent) return;
-        const v = vals[r.row - 2], sc = scoreOf_(pack, r.keys, r.ans, r.leaves);
-        v[cR] = sc.pct; v[cB] = sc.ok + '/' + sc.n;
-        if (r.keys.indexOf(k) >= 0) { v[ci] = cellFor_(q, r.ans[k], r.ended); sh.getRange(r.row, ci + 1).setNote(noteFor_(q, r.ans[k])); }
-        n++;
-      });
-      rng.setValues(vals);
-      sh.getRange(1, ci + 1).setNote(headNote_(q));
-    }
-    return { ok: true, n: n };
+    return { ok: true, n: recalcQ_(test, pack, k) };
   });
+}
+// Po zmene kľúča jednej otázky: body a percentá všetkých žiakov, bunka a poznámka tej otázky, poznámka v hlavičke. Vráti počet prepočítaných.
+function recalcQ_(test, pack, k) {
+  const sh = resultsGet_(test.id), q = pack.q[k];
+  let n = 0;
+  if (!sh || sh.getLastRow() < 2) return 0;
+  const tb = tableOf_(sh), cR = tb.need('vysledok'), cB = tb.need('body'), ci = cB + 1 + test.keys.indexOf(k);
+  const rng = sh.getRange(2, 1, sh.getLastRow() - 1, tb.head.length), vals = rng.getValues();
+  const notes = sh.getRange(2, ci + 1, vals.length, 1).getNotes();
+  readResults_(test).forEach(function (r) {
+    if (r.absent) return;
+    const v = vals[r.row - 2], sc = scoreOf_(pack, r.keys, r.ans, r.leaves);
+    v[cR] = sc.pct; v[cB] = sc.ok + '/' + sc.n;
+    if (r.keys.indexOf(k) >= 0) { v[ci] = cellFor_(q, r.ans[k], r.ended); notes[r.row - 2][0] = noteFor_(q, r.ans[k]); }
+    n++;
+  });
+  rng.setValues(vals);
+  sh.getRange(2, ci + 1, vals.length, 1).setNotes(notes);
+  sh.getRange(1, ci + 1).setNote(headNote_(q));
+  return n;
+}
+// Kontrola odpovede na dopísanie: op 'accept' (uznať, pridá sa aj do stĺpca Správna v hárku Otázky), 'reject' (zamietnuť,
+// už nebude na kontrolu), 'reset' (zrušiť rozhodnutie učiteľa). txt = odpoveď tak, ako ju žiak napísal. Výsledky sa prepočítajú.
+function tTextAns_(req) {
+  const f = findTest_(String(req.t || ''));
+  if (!f) fail_('no_test');
+  const test = f.test, k = String(req.q || ''), op = String(req.op || ''), raw = String(req.txt || '').replace(/\s+/g, ' ').trim().slice(0, TEXT_MAX), key = ansKey(raw);
+  if (!key || ['accept', 'reject', 'reset'].indexOf(op) < 0) fail_('bad_request');
+  return withLock_(function () {
+    const pack = loadPack_(test.id), q = pack.q[k];
+    if (!q || !q.text) fail_('bad_request');
+    q.add = q.add || []; q.rej = q.rej || [];
+    const same = function (x) { return ansKey(x) === key; };
+    const removed = q.add.filter(same);
+    q.add = q.add.filter(function (x) { return !same(x); });
+    q.rej = q.rej.filter(function (x) { return x !== key; });
+    let sheet = null;
+    if (op === 'accept') {
+      if (!q.acc.some(same)) { q.add.push(raw); sheet = sheetAcc_(q, raw, true); }
+    } else {
+      if (op === 'reject') q.rej.push(key);
+      if (removed.length) sheet = sheetAcc_(q, raw, false);
+    }
+    savePack_(test.id, pack);
+    return { ok: true, n: recalcQ_(test, pack, k), q: q, sheet: sheet };
+  });
+}
+// Uznanú odpoveď zapíše (add) alebo zmaže (!add) v stĺpci Správna riadku otázky v hárku Otázky, ak je tam stále tá istá otázka.
+// Odpovede, ktoré boli v stĺpci Správna už pri vytvorení testu, sa nemažú. Vráti true, ak sa hárok zmenil.
+function sheetAcc_(q, raw, add) {
+  try {
+    const sh = sheetByNames_(SH.questions);
+    if (!sh || !q.row) return false;
+    const t = tableOf_(sh), cQ = t.need(['otazka', 'question']), cK = t.need(['spravna', 'correct']), row = t.rows[q.row - 2];
+    if (!row || s_(row[cQ]) !== q.q) return false;
+    const key = ansKey(raw), cur = s_(row[cK]).split(';').map(function (x) { return x.trim(); }).filter(String);
+    let next;
+    if (add) { if (cur.some(function (x) { return ansKey(x) === key; })) return false; next = cur.concat([raw]); }
+    else {
+      if (q.acc.some(function (x) { return ansKey(x) === key; })) return false;
+      next = cur.filter(function (x) { return ansKey(x) !== key; });
+      if (next.length === cur.length || !next.length) return false;
+    }
+    sh.getRange(q.row, cK + 1).setNumberFormat('@').setValue(next.join('; '));
+    return true;
+  } catch (e) { return false; }
 }
 // Odomknutie: žiak sa prihlási na inom zariadení a pokračuje (čas aj odchody ostávajú).
 // Pri žiakovi, ktorý už odovzdal, je to nový pokus: začína od začiatku, s celým časom.

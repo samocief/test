@@ -8,7 +8,7 @@
 <title>Písomky · učiteľ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;800&display=swap">
-<link rel="stylesheet" href="css/app.css?v=1.4">
+<link rel="stylesheet" href="css/app.css?v=1.5">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231c4f8a'/%3E%3Crect x='8' y='7' width='16' height='19' rx='2' fill='%23f5f7ea'/%3E%3Cpath d='M11 13h10M11 17h10M11 21h6' stroke='%231c4f8a' stroke-width='2'/%3E%3Ccircle cx='23' cy='8' r='3.5' fill='%23ff74b4'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -132,6 +132,7 @@
             <p class="small muted" id="avg-note"></p>
           </div>
           <p id="over-sum" class="small muted"></p>
+          <div id="over-review" class="note row" style="align-items:center" hidden><span id="over-review-t" style="flex:1 1 220px"></span><button type="button" class="mini" id="over-review-b" data-i18n="t.review_go"></button></div>
           <div id="over-table" class="tablebox"></div>
           <div class="row"><button type="button" id="over-copy" data-i18n="t.copy_results"></button><button type="button" id="over-export" data-i18n="t.export_drive"></button><p id="over-msg" class="small" hidden></p></div>
         </div>
@@ -144,6 +145,7 @@
           <div id="qs-body" class="stack">
             <p class="small muted" data-i18n="t.qs_note"></p>
             <p class="small muted" data-i18n="t.fix_hint"></p>
+            <p class="small muted" id="qs-text-hint" data-i18n="t.text_hint" hidden></p>
             <p id="qs-msg" class="small" hidden></p>
             <div id="qs-list" class="qstat"></div>
           </div>
@@ -161,8 +163,8 @@
 </div>
 <div id="print-sheet"></div>
 
-<script src="js/qrcode.js?v=1.4"></script>
-<script src="js/core.js?v=1.4"></script>
-<script src="js/teacher.js?v=1.4"></script>
+<script src="js/qrcode.js?v=1.5"></script>
+<script src="js/core.js?v=1.5"></script>
+<script src="js/teacher.js?v=1.5"></script>
 </body>
 </html>

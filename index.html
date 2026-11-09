@@ -7,7 +7,7 @@
 <title>Písomka</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;800&display=swap">
-<link rel="stylesheet" href="css/app.css?v=1.4">
+<link rel="stylesheet" href="css/app.css?v=1.5">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231c4f8a'/%3E%3Crect x='8' y='7' width='16' height='19' rx='2' fill='%23f5f7ea'/%3E%3Cpath d='M11 13h10M11 17h10M11 21h6' stroke='%231c4f8a' stroke-width='2'/%3E%3Ccircle cx='23' cy='8' r='3.5' fill='%23ff74b4'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -53,6 +53,7 @@
         <p id="p-intro-n"></p>
         <ul class="rules">
           <li data-i18n="p.rule_pick"></li>
+          <li id="p-intro-text" data-i18n="p.rule_text" hidden></li>
           <li data-i18n="p.rule_free"></li>
           <li data-i18n="p.rule_flag"></li>
           <li data-i18n="p.rule_meters"></li>
@@ -128,8 +129,12 @@
     <div class="qscroll" id="g-scroll">
       <div class="qcard">
         <div class="qtext" id="g-q"></div>
-        <img class="qimg" id="g-img" alt="" hidden>
+        <div class="qimgbox" id="g-imgbox" hidden><img class="qimg" id="g-img" alt=""><span class="zoomico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M10.5 7.5v6M7.5 10.5h6"/></svg></span></div>
         <ol class="opts" id="g-opts"></ol>
+        <div class="tans" id="g-text" hidden>
+          <label for="g-input" class="sr" data-i18n="p.text_label"></label>
+          <input id="g-input" type="text" maxlength="100" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" data-i18n-attr="placeholder:p.text_ph">
+        </div>
       </div>
     </div>
     <div class="foot">
@@ -143,7 +148,7 @@
 <div id="p-blur" class="cover" hidden><p class="alert" data-i18n="p.blur"></p></div>
 <div id="p-small" class="cover" style="cursor:default" hidden><p class="alert" data-i18n="p.small"></p></div>
 
-<script src="js/core.js?v=1.4"></script>
-<script src="js/pupil.js?v=1.4"></script>
+<script src="js/core.js?v=1.5"></script>
+<script src="js/pupil.js?v=1.5"></script>
 </body>
 </html>
