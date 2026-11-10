@@ -1,5 +1,15 @@
 # Zmeny
 
+## 1.7 (2026-11-10) – treba vymeniť skript tabuľky
+
+- **Hárok Žiaci = zasadací poriadok.** Celú tabuľku zo Skola.xlsx (hárok Sedenie) stačí vložiť do hárka Žiaci: `Trieda | Rad | A | B | A | B …`.
+  Skupina žiaka je písmeno v hlavičke jeho stĺpca, prázdna bunka je prázdne miesto. Riadok bez triedy patrí k triede nad ním, zopakovaná hlavička sa preskočí.
+  Starý tvar (Trieda | Meno | Skupina | Aktívny) funguje ďalej.
+- **Šachovnica** (nový test, trieda so skupinami zo zasadacieho poriadku): v každom druhom rade sa skupiny prehodia, takže inú skupinu má aj sused vpredu a vzadu.
+  Uloží sa do nového stĺpca `šachovnica` v hárku Testy. Bez nej idú skupiny po stĺpcoch (za sebou sedí tá istá skupina).
+- Trieda „7A“ a „7.A“ je tá istá (staršie testy s „9.A“ nájdu žiakov aj po prechode na zasadací poriadok).
+- Hlavička môže mať aj písmeno C a ďalšie (šachovnica ich posúva A→B→C→A), testy však majú zatiaľ len dve sady otázok; ďalšie skupiny píšu A.
+
 ## 1.6 (2026-11-10) – treba vymeniť skript tabuľky
 
 - **Číselné otázky.** A–F prázdne, v stĺpci Správna číslo: `1989` (presne), `1989~5` (±5), `750000000~20%` (±20 %),

@@ -72,12 +72,20 @@ function tTab(name) {
 /* ---------- formulár novej písomky ---------- */
 function bankTest() { var v = $('f-bank').value; return v === '' ? null : T.init.bank.tests[+v] || null; }
 function classGroups() { var c = $('f-cls').value, g = (T.init.groups || {})[c]; return g || null; }
+// Šachovnica (len pri zasadacom poriadku v hárku Žiaci): v každom druhom rade sú skupiny prehodené, takže inú skupinu má aj sused vpredu a vzadu.
+function altOn(g) { return !!(g && g.seat && form().alt); }
+function groupCounts(g) { return altOn(g) && g.alt ? { A: g.alt.A || 0, B: g.alt.B || 0, none: g.none } : g; }
+function altChip(g, after) {
+  var inp = el('input', { type: 'checkbox' }); inp.checked = altOn(g);
+  inp.onchange = function () { saveForm({ alt: inp.checked }); after(); };
+  return el('div', { class: 'stack tight' }, [el('label', { class: 'chip', style: 'align-self:flex-start' }, [inp, ' ' + t('t.alt')]), el('p', { class: 'small muted', text: t('t.alt_hint') })]);
+}
 // Čo bude trieda písať: skupiny A/B (test aj trieda ich majú), alebo všetci to isté (all / A / B).
 function tPlan() {
   var b = bankTest(), g = classGroups();
   if (!b) return null;
   var nA = b.n - b.B, nB = b.n - b.A, testAB = b.A > 0 && b.B > 0;
-  if (testAB && g && g.A > 0 && g.B > 0) return { groups: true, nA: nA, nB: nB, g: g };
+  if (testAB && g && g.A > 0 && g.B > 0) return { groups: true, nA: nA, nB: nB, g: groupCounts(g), alt: altOn(g) };
   var only = testAB ? ($('f-groups').querySelector('input[name=only]:checked') || {}).value || 'all' : 'all';
   return { groups: false, testAB: testAB, only: only, n: only === 'A' ? nA : only === 'B' ? nB : b.n, nA: nA, nB: nB };
 }
@@ -126,7 +134,9 @@ function tPlanInfo() {
   if (b && c) {
     var g = classGroups(), testAB = b.A > 0 && b.B > 0, nA = b.n - b.B, nB = b.n - b.A;
     if (testAB && g && g.A > 0 && g.B > 0) {
-      box.appendChild(el('p', { class: 'small muted', text: t('t.groups_on', { cls: c, a: g.A, b: g.B, na: nA, nb: nB }) }));
+      var gc = groupCounts(g);
+      box.appendChild(el('p', { class: 'small muted', text: t('t.groups_on', { cls: c, a: gc.A, b: gc.B, na: nA, nb: nB }) }));
+      if (g.seat) box.appendChild(altChip(g, tPlanInfo));
       if (g.none.length) box.appendChild(el('p', { class: 'small bad', text: t('t.groups_missing', { names: g.none.join(', ') }) }));
     } else if (testAB) {
       box.appendChild(el('p', { class: 'small', text: t('t.only_label', { cls: c }) }));
@@ -177,12 +187,12 @@ async function tStart(state) {
   if (!c || !b) { tStatus('start-msg', t(!c && !b ? 't.err_required' : !c ? 't.err_class' : 't.err_bank'), 'bad'); (!c ? $('f-cls') : $('f-bank')).focus(); return; }
   if (plan.groups && plan.g.none.length && !confirm(t('t.groups_confirm', { names: plan.g.none.join(', ') }))) return;
   var title = $('f-title').value.trim() || b.name, total = Math.max(1, Math.min(240, parseInt($('f-time').value, 10) || 15));
-  var cfg = { cls: c, bank: b.name, title: title, total: total, state: state, shuffle: $('f-shuffle').checked, reveal: $('f-reveal').value, only: plan.groups ? 'all' : plan.only };
+  var cfg = { cls: c, bank: b.name, title: title, total: total, state: state, shuffle: $('f-shuffle').checked, reveal: $('f-reveal').value, only: plan.groups ? 'all' : plan.only, alt: !!(plan.groups && plan.alt) };
   $('start').disabled = $('prepare').disabled = true; tStatus('start-msg', t('t.saving'));
   try {
     var r = await api('tCreateTest', A({ cfg: cfg }));
     tStatus('start-msg', '');
-    var x = { id: r.id, created: '', cls: r.cls || c, bank: b.name, title: title, n: r.n, groups: !!r.groups, total: r.total || total, state: state, dk: r.dk || '' };
+    var x = { id: r.id, created: '', cls: r.cls || c, bank: b.name, title: title, n: r.n, groups: !!r.groups, alt: !!r.alt, total: r.total || total, state: state, dk: r.dk || '' };
     T.init.tests.push(x);
     // ďalšia písomka sa začína s prázdnou triedou, testom a skrytými otázkami
     $('f-cls').value = ''; $('f-bank').value = ''; $('f-title').value = ''; $('f-title').placeholder = t('t.title_ph'); tListToggle(false); tPlanInfo();
@@ -223,7 +233,7 @@ function tDozorShow(x) {
   tQrShow(t('t.dozor_title', { title: x.title || x.id }), dozorUrl(x.id, x.dk), { warn: t('t.dozor_warn'), print: function () { tPrint(x); } });
 }
 function tPrint(x) {
-  var box = $('print-sheet'), meta = [t('t.class_short', { cls: x.cls }), t('t.n_questions', { n: x.n }), t('t.time_short', { n: x.total }), x.groups ? t('t.groups_ab') : ''].filter(Boolean).join(' · ');
+  var box = $('print-sheet'), meta = [t('t.class_short', { cls: x.cls }), t('t.n_questions', { n: x.n }), t('t.time_short', { n: x.total }), x.groups ? t('t.groups_ab') : '', x.alt ? t('t.alt_short') : ''].filter(Boolean).join(' · ');
   box.innerHTML = '';
   box.appendChild(el('h1', { text: t('app.title') + ': ' + (x.title || x.id) }));
   box.appendChild(el('p', { text: meta }));
@@ -326,7 +336,7 @@ function tHead() {
   $('test-toggle').textContent = st === 'ready' ? t('t.start_test') : st === 'open' ? t('t.close_test') : t('t.reopen_test');
   $('test-toggle').className = st === 'closed' ? '' : 'primary';
   $('test-toggle-hint').textContent = st === 'ready' ? t('t.ready_hint') : st === 'open' ? t('t.close_hint', { min: x.review || 15 }) : t('t.closed_hint', { min: x.review || 15 });
-  $('test-meta').textContent = [t('t.class_short', { cls: x.cls }), x.bank && x.bank !== x.title ? x.bank : '', t('t.n_questions', { n: (x.groups ? x.keysA : x.keys).length }), x.groups ? t('t.groups_ab') : '',
+  $('test-meta').textContent = [t('t.class_short', { cls: x.cls }), x.bank && x.bank !== x.title ? x.bank : '', t('t.n_questions', { n: (x.groups ? x.keysA : x.keys).length }), x.groups ? t('t.groups_ab') : '', x.alt ? t('t.alt_short') : '',
     t('t.time_short', { n: x.total }), x.created, x.id].filter(Boolean).join(' · ');
 }
 async function tToggleState() {

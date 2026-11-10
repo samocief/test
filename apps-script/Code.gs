@@ -22,17 +22,20 @@
  *
  * Od 1.6: číselné otázky (prázdne A–F, v stĺpci Správna číslo, voliteľne s odchýlkou: 1989~5, 750000000~20%, 750000000~5%~20%).
  * Body za otázku sú 0 až 1 na desatiny, pri odchýlke klesajú lineárne. Body v hárku výsledkov sú napr. „7,3/10“.
+ *
+ * Od 1.7: hárok Žiaci môže byť zasadací poriadok skopírovaný z Excelu (Trieda | Rad | A | B | A | B …), skupina je v hlavičke stĺpca.
+ * Test so šachovnicou (stĺpec „šachovnica“ v hárku Testy) má v každom druhom rade skupiny prehodené.
  */
-const VERSION = '1.6';
+const VERSION = '1.7';
 const APP_URL = 'https://samocief.github.io/test/';
 const APP_NAME = 'Písomky';
 
 const SH = { questions: ['Otázky', 'Otazky', 'Questions'], pupils: ['Žiaci', 'Ziaci', 'Pupils', 'Students'], tests: 'Testy', packs: '_balíky' };
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 const Q_HEAD = ['Test', 'Skupina', 'Otázka', 'A', 'B', 'C', 'D', 'E', 'F', 'Správna', 'Obrázok', 'Aktívna'];
-const PUPIL_HEAD = ['Trieda', 'Meno', 'Skupina', 'Aktívny'];
+const PUPIL_HEAD = ['Trieda', 'Rad', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'B'];   // nový hárok Žiaci: zasadací poriadok
 const TEST_HEAD = ['id testu', 'vytvorený', 'trieda', 'test z banky', 'názov', 'stav', 'celkový čas (min)', 'počet otázok', 'skupiny',
-  'miešať možnosti', 'žiak po uzavretí uvidí', 'otázky A', 'otázky B', 'uzavretý o'];
+  'miešať možnosti', 'žiak po uzavretí uvidí', 'otázky A', 'otázky B', 'uzavretý o', 'šachovnica'];
 const RES_FIXED = ['odoslané', 'žiak', 'skupina', 'výsledok (%)', 'body'];
 const RES_TAIL = ['odchody', 'odpovede', 'príznak'];
 const LEAVE_PENALTY = 0.10;    // strhnutie z celkového výsledku za prvý odchod z testu (10 percentuálnych bodov)
@@ -476,35 +479,73 @@ function splitAcc_(v) {
 
 /* ---------- žiaci ---------- */
 function pupilKey_(cls, label) { return normName(cls) + '|' + normName(label); }
-// Hárok Žiaci: Trieda | Meno („Priezvisko Meno“) | Skupina (A/B, voliteľne) | Aktívny. Voliteľne samostatný stĺpec Priezvisko.
-function readPupils_() {
+// Rovnaká trieda aj pri inom zápise: „9.A“ = „9A“ = „9 a“.
+function sameCls_(a, b) { return normName(a).replace(/ /g, '') === normName(b).replace(/ /g, ''); }
+// Hárok Žiaci v jednom z dvoch tvarov:
+//  1. zasadací poriadok (celá tabuľka skopírovaná z Excelu): Trieda | Rad | A | B | A | B …
+//     Skupina je v hlavičke stĺpca (jedno písmeno, aj C, D …), prázdna bunka = prázdne miesto. Riadok bez triedy patrí k triede nad ním,
+//     zopakovaná hlavička sa preskočí. Stĺpec Rad je číslo radu (bez neho sa rady počítajú zhora).
+//  2. zoznam: Trieda | Meno („Priezvisko Meno“) | Skupina (A/B, voliteľne) | Aktívny. Voliteľne samostatný stĺpec Priezvisko.
+// Každý žiak má group (skupina zo stĺpca) a galt (šachovnica: v každom druhom rade sú skupiny posunuté o jednu, A↔B, pri A/B/C A→B→C→A).
+// alt = true: test so šachovnicou, group = galt.
+function readPupils_(alt) {
   const sh = sheetByNames_(SH.pupils);
   if (!sh) fail_('no_sheet', SH.pupils[0]);
   const t = tableOf_(sh);
-  const cC = t.need(['trieda', 'class']), cS = t.col(['priezvisko', 'surname', 'last name']), cN = t.need(['meno', 'name', 'ziak']), cA = t.col(['aktivny', 'active']);
-  const cG = t.col(['skupina', 'group']);
+  const cC = t.need(['trieda', 'class']);
   const out = [], used = {};
+  const add = function (cls, label, group, galt, active, seat) {
+    let id = pupilKey_(cls, label);
+    if (used[id]) id += '#' + (++used[id]); else used[id] = 1;
+    out.push({ id: id, cls: cls, label: label, group: alt ? galt : group, galt: galt, active: active, seat: seat });
+  };
+  const gCols = [];
+  t.head.forEach(function (h, i) { if (/^[a-z]$/.test(h)) gCols.push(i); });
+  const cN = t.col(['meno', 'name', 'ziak']);
+  if (cN < 0 && gCols.length) {
+    const letters = [];
+    gCols.forEach(function (i) { const g = t.head[i].toUpperCase(); if (letters.indexOf(g) < 0) letters.push(g); });
+    const cR = t.col(['rad', 'row']), rowNo = {};
+    let cls = '';
+    t.rows.forEach(function (row) {
+      const c = s_(row[cC]);
+      if (normName(c) === 'trieda' || normName(c) === 'class') return;   // zopakovaná hlavička
+      if (c) cls = c;
+      if (!cls) return;
+      const names = gCols.filter(function (i) { return s_(row[i]); });
+      if (!names.length) return;
+      const n = cR >= 0 ? num_(row[cR]) : null;
+      const r = n !== null ? Math.max(0, Math.round(n) - 1) : (rowNo[cls] = (rowNo[cls] || 0) + 1) - 1;
+      names.forEach(function (i) {
+        const g = t.head[i].toUpperCase();
+        add(cls, s_(row[i]).replace(/\s+/g, ' '), g, letters[(letters.indexOf(g) + r) % letters.length], true, true);
+      });
+    });
+    return out;
+  }
+  if (cN < 0) fail_('no_col', t.label + ': meno');
+  const cS = t.col(['priezvisko', 'surname', 'last name']), cA = t.col(['aktivny', 'active']), cG = t.col(['skupina', 'group']);
   t.rows.forEach(function (row) {
     const cls = s_(row[cC]), label = ((cS >= 0 && cS !== cN ? s_(row[cS]) + ' ' : '') + s_(row[cN])).trim();
     if (!cls || !label) return;
-    let id = pupilKey_(cls, label);
-    if (used[id]) id += '#' + (++used[id]); else used[id] = 1;
     const g = cG >= 0 ? normName(row[cG]).split(' ').pop() : '';   // „A“, „b“, „Skupina B“
-    out.push({ id: id, cls: cls, label: label, group: g === 'a' ? 'A' : g === 'b' ? 'B' : '', active: cA >= 0 ? yes_(row[cA]) : true });
+    const grp = g === 'a' ? 'A' : g === 'b' ? 'B' : '';
+    add(cls, label, grp, grp, cA >= 0 ? yes_(row[cA]) : true, false);
   });
   return out;
 }
-// Skupiny tried: {trieda: {A: počet, B: počet, none: [mená bez skupiny]}}.
+// Skupiny tried: {trieda: {A: počet, B: počet, none: [mená bez skupiny], alt: {A, B} pri šachovnici, seat: zasadací poriadok}}.
 function classGroups_(pupils) {
   const out = {};
   pupils.forEach(function (p) {
     if (!p.active) return;
-    const o = out[p.cls] = out[p.cls] || { A: 0, B: 0, none: [] };
-    if (p.group) o[p.group]++; else o.none.push(p.label);
+    const o = out[p.cls] = out[p.cls] || { A: 0, B: 0, none: [], alt: { A: 0, B: 0 }, seat: false };
+    if (p.group) o[p.group] = (o[p.group] || 0) + 1; else o.none.push(p.label);
+    if (p.galt) o.alt[p.galt] = (o.alt[p.galt] || 0) + 1;
+    if (p.seat) o.seat = true;
   });
   return out;
 }
-
 /* ---------- testy ---------- */
 function testsTable_() {
   ensureCols_(ensureSheet_(SH.tests, TEST_HEAD), TEST_HEAD);
@@ -518,7 +559,7 @@ function testObj_(t, row) {
   return {
     id: s_(g('id testu')), created: s_(g('vytvoreny')), cls: s_(g('trieda')), bank: s_(g('test z banky')), title: s_(g('nazov')),
     state: st === normName(STATE.closed) ? 'closed' : st === normName(STATE.ready) ? 'ready' : 'open',
-    total: Math.max(1, num_(g('celkovy cas')) || 10), groups: keysB.length > 0,
+    total: Math.max(1, num_(g('celkovy cas')) || 10), groups: keysB.length > 0, alt: keysB.length > 0 && normName(g('sachovnica')) === 'ano',
     shuffle: yes_(g('miesat')), reveal: normName(g('ziak po')) === normName(REVEAL.pct) ? 'pct' : 'all',
     keysA: keysA, keysB: keysB, keys: uniq_(keysA.concat(keysB)),
     closedMs: msOf_(g('uzavrety o')), review: REVIEW_MIN
@@ -758,7 +799,7 @@ function teacherId_(test) { return pupilKey_(test.cls, TEACHER); }
 // Kto sa prihlasuje: žiak zo zoznamu triedy alebo učiteľ (na vyskúšanie, nepočíta sa do priemeru).
 function player_(test, pupilId) {
   if (pupilId === teacherId_(test)) return { id: pupilId, label: TEACHER, teacher: true, group: '' };
-  const me = readPupils_().filter(function (p) { return p.cls === test.cls && p.active && p.id === pupilId; })[0];
+  const me = readPupils_(test.alt).filter(function (p) { return sameCls_(p.cls, test.cls) && p.active && p.id === pupilId; })[0];
   if (!me) fail_('not_in_class');
   return { id: me.id, label: me.label, group: me.group };
 }
@@ -795,7 +836,7 @@ function pupilInit_(req) {
   const test = testCached_(String(req.t || ''));
   if (!test) fail_('no_test');
   const L = logins_(test.id);
-  const names = readPupils_().filter(function (p) { return p.cls === test.cls && p.active; })
+  const names = readPupils_(test.alt).filter(function (p) { return sameCls_(p.cls, test.cls) && p.active; })
     .map(function (p) { const e = L.p[p.id]; return { id: p.id, label: p.label, done: !!(e && e.done) }; })
     .sort(function (a, b) { return a.label.localeCompare(b.label, 'sk'); });
   const tid = teacherId_(test), te = L.p[tid];
@@ -1085,17 +1126,19 @@ function tInit_() {
   pupils.filter(function (p) { return p.active; }).forEach(function (p) { (classes[p.cls] = classes[p.cls] || []).push(p.label); });
   const t = testsTable_();
   const tests = t.rows.map(function (r) { return testObj_(t, r); }).filter(function (x) { return x.id; })
-    .map(function (x) { return { id: x.id, created: x.created, cls: x.cls, bank: x.bank, title: x.title, n: (x.groups ? x.keysA : x.keys).length, groups: x.groups, total: x.total, state: x.state }; });
+    .map(function (x) { return { id: x.id, created: x.created, cls: x.cls, bank: x.bank, title: x.title, n: (x.groups ? x.keysA : x.keys).length, groups: x.groups, alt: x.alt, total: x.total, state: x.state }; });
   return { v: VERSION, classes: classes, groups: classGroups_(pupils), penalty: LEAVE_PENALTY, tests: tests, bank: readBank_(), sheetUrl: ss_().getUrl(), sheetName: ss_().getName() };
 }
-// cfg: {cls, bank (názov testu v hárku Otázky), title, total (min), state, shuffle, reveal ('all'|'pct'), only ('all'|'A'|'B' pri triede bez skupín)}
+// cfg: {cls, bank (názov testu v hárku Otázky), title, total (min), state, shuffle, reveal ('all'|'pct'), only ('all'|'A'|'B' pri triede bez skupín), alt (šachovnica)}
 // Otázky si skript prečíta z hárka Otázky sám a uloží ich snímku (balík) k testu.
 function tCreateTest_(req) {
   const cfg = req.cfg || {}, cls = String(cfg.cls || '').trim();
   if (!cls) fail_('bad_request');
   const bank = readBank_().tests.filter(function (x) { return normName(x.name) === normName(cfg.bank); })[0];
   if (!bank || !bank.qs.length) fail_('no_questions', String(cfg.bank || ''));
-  const cg = classGroups_(readPupils_())[cls] || { A: 0, B: 0, none: [] };
+  const cg0 = classGroups_(readPupils_())[cls] || { A: 0, B: 0, none: [], alt: { A: 0, B: 0 } };
+  // šachovnica: v každom druhom rade sú skupiny prehodené (len pri zasadacom poriadku)
+  const alt = !!cfg.alt && !!cg0.seat, cg = alt ? { A: cg0.alt.A || 0, B: cg0.alt.B || 0, none: cg0.none } : cg0;
   const qsA = bank.qs.filter(function (q) { return q.g !== 'B'; }), qsB = bank.qs.filter(function (q) { return q.g !== 'A'; });
   const groups = bank.A > 0 && bank.B > 0 && cg.A > 0 && cg.B > 0;
   let keysA, keysB = [];
@@ -1121,21 +1164,21 @@ function tCreateTest_(req) {
     put('nazov', String(cfg.title || bank.name).slice(0, 80)); put('stav', cfg.state === 'ready' ? STATE.ready : STATE.open); put('celkovy cas', total);
     put('pocet', keysA.length); put('skupiny', groups ? 'A/B' : cfg.only === 'A' || cfg.only === 'B' ? 'len ' + cfg.only : '');
     put('miesat', cfg.shuffle === false ? 'nie' : 'áno'); put('ziak po', cfg.reveal === 'pct' ? REVEAL.pct : REVEAL.all);
-    put('otazky a', keysA.join('; ')); put('otazky b', keysB.join('; '));
+    put('otazky a', keysA.join('; ')); put('otazky b', keysB.join('; ')); put('sachovnica', groups && alt ? 'áno' : '');
     const r = t.sheet.getLastRow() + 1;
     t.sheet.getRange(r, 1, 1, row.length).setNumberFormat('@').setValues([row.map(function (v) { return typeof v === 'number' ? v : String(v); })]);
     const test = { id: id, groups: groups, keysA: keysA, keysB: keysB, keys: uniq_(keysA.concat(keysB)) };
     savePack_(id, pack);
     createResultsSheet_(test, pack);
     try { pruneLogins_(testsTable_()); } catch (e) { /* upratovanie nie je dôležité */ }
-    return { id: id, cls: cls, dk: dozorKey_(id), total: total, n: keysA.length, groups: groups };
+    return { id: id, cls: cls, dk: dozorKey_(id), total: total, n: keysA.length, groups: groups, alt: groups && alt };
   });
 }
 function tTest_(req) {
   const f = findTest_(String(req.t || ''));
   if (!f) fail_('no_test');
   const test = f.test, L = logins_(test.id), S = starts_(test.id);
-  const pupils = readPupils_().filter(function (p) { return p.cls === test.cls && p.active; })
+  const pupils = readPupils_(test.alt).filter(function (p) { return sameCls_(p.cls, test.cls) && p.active; })
     .map(function (p) { return { id: p.id, label: p.label, group: test.groups ? p.group || 'A' : '', nogroup: test.groups && !p.group }; })
     .sort(function (a, b) { return a.label.localeCompare(b.label, 'sk'); });
   pupils.push({ id: teacherId_(test), label: TEACHER, teacher: true, group: test.groups ? 'A' : '' });
@@ -1266,7 +1309,7 @@ function tAbsent_(req) {
   if (!f) fail_('no_test');
   const test = f.test, pid = String(req.p || '');
   if (pid === teacherId_(test)) fail_('bad_request');
-  const me = readPupils_().filter(function (p) { return p.cls === test.cls && p.id === pid; })[0];
+  const me = readPupils_(test.alt).filter(function (p) { return sameCls_(p.cls, test.cls) && p.id === pid; })[0];
   if (!me) fail_('not_in_class');
   withLock_(function () {
     const L = logins_(test.id);
