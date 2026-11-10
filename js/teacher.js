@@ -295,7 +295,7 @@ function resScore(r) {
   var pack = T.cur.pack, keys = keysOf(r);
   if (!pack) { var m = /([\d.,]+)\s*\/\s*(\d+)/.exec(r.points || ''); return { ok: m ? +m[1].replace(',', '.') : null, n: keys.length, pct: typeof r.pct === 'number' ? r.pct : null }; }
   var ok = 0; keys.forEach(function (k) { ok += ansPts(pack.q[k], r.ans[k]); });
-  ok = Math.round(ok * 10) / 10;
+  ok = Math.round(ok * 100) / 100;
   return { ok: ok, n: keys.length, pct: Math.max(0, (keys.length ? ok / keys.length : 0) - (r.leaves > 0 ? T.cur.d.penalty || 0 : 0)) };
 }
 // Posledný odovzdaný pokus každého žiaka. res = všetky odovzdané (aj učiteľ), stat = bez učiteľa, absent = neprítomní.

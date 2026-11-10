@@ -21,12 +21,12 @@
  * (záložka Otázky v aplikácii učiteľa): uznaná sa pridá do stĺpca Správna a výsledky sa prepočítajú.
  *
  * Od 1.6: číselné otázky (prázdne A–F, v stĺpci Správna číslo, voliteľne s odchýlkou: 1989~5, 750000000~20%, 750000000~5%~20%).
- * Body za otázku sú 0 až 1 na desatiny, pri odchýlke klesajú lineárne. Body v hárku výsledkov sú napr. „7,3/10“.
+ * Body za otázku sú 0 až 1 na stotiny, pri odchýlke klesajú lineárne. Body v hárku výsledkov sú napr. „7,3/10“.
  *
  * Od 1.7: hárok Žiaci môže byť zasadací poriadok skopírovaný z Excelu (Trieda | Rad | A | B | A | B …), skupina je v hlavičke stĺpca.
  * Test so šachovnicou (stĺpec „šachovnica“ v hárku Testy) má v každom druhom rade skupiny prehodené.
  */
-const VERSION = '1.7';
+const VERSION = '1.8';
 const APP_URL = 'https://samocief.github.io/test/';
 const APP_NAME = 'Písomky';
 
@@ -159,14 +159,14 @@ function numSpec(v) {
   if (two && dev[0] >= dev[1]) return { err: 'plné body (prvá odchýlka) musia byť menej ako odchýlka pre nula bodov' };
   return { val: val, full: two ? dev[0] : 0, tol: dev[dev.length - 1], fullP: two ? pct[0] : null, tolP: pct[pct.length - 1] };
 }
-// Body za číselnú odpoveď (0 až 1, na desatiny): v pásme plných bodov 1, potom lineárne menej, od odchýlky tol 0.
+// Body za číselnú odpoveď (0 až 1, na stotiny): v pásme plných bodov 1, potom lineárne menej, od odchýlky tol 0.
 function numPts(q, a) {
   var x = numParse(a);
   if (x === null) return 0;
   var d = Math.abs(x - q.val), eps = 1e-9 * Math.max(1, Math.abs(q.val));
   if (d <= q.full + eps) return 1;
   if (d >= q.tol - eps) return 0;
-  return Math.round((1 - (d - q.full) / (q.tol - q.full)) * 10) / 10;
+  return Math.round((1 - (d - q.full) / (q.tol - q.full)) * 100) / 100;
 }
 // Číslo na zobrazenie: desatinná čiarka, tisíce oddelené medzerou (štvormiestne čísla ako roky bez medzery).
 function numFmt(x) {
@@ -177,8 +177,8 @@ function numFmt(x) {
   var p = s.split('.'), i = p[0].length > 4 ? p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : p[0];
   return (neg ? '-' : '') + i + (p[1] ? ',' + p[1] : '');
 }
-// Body na zobrazenie: 7,3 alebo 8.
-function ptsFmt(p) { return String(Math.round((p || 0) * 10) / 10).replace('.', ','); }
+// Body na zobrazenie: 7,35 alebo 8.
+function ptsFmt(p) { return String(Math.round((p || 0) * 100) / 100).replace('.', ','); }
 // Body za jednu odpoveď: správna 1, nesprávna, na kontrolu alebo bez odpovede 0, číselná podľa odchýlky.
 function ansPts(q, a) {
   if (!q) return 0;
@@ -749,11 +749,11 @@ function headNote_(q) {
   return q.q + '\n\n' + q.opts.map(function (o, i) { return LETTERS[i] + ') ' + o + (i === q.ok ? '  ✓' : ''); }).join('\n');
 }
 // Body a percentá: body / počet otázok žiaka, za prvý odchod mínus LEAVE_PENALTY (najmenej 0).
-// Odpoveď na kontrolu je za 0 bodov, kým ju učiteľ neuzná. Číselná otázka môže dať časť bodu (na desatiny).
+// Odpoveď na kontrolu je za 0 bodov, kým ju učiteľ neuzná. Číselná otázka môže dať časť bodu (na stotiny).
 function scoreOf_(pack, keys, ans, leaves) {
   let ok = 0;
   keys.forEach(function (k) { ok += ansPts(pack.q[k], ans[k]); });
-  ok = Math.round(ok * 10) / 10;
+  ok = Math.round(ok * 100) / 100;
   const p = keys.length ? ok / keys.length : 0;
   return { ok: ok, n: keys.length, pct: Math.max(0, p - (leaves > 0 ? LEAVE_PENALTY : 0)) };
 }

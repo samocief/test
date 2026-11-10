@@ -1,5 +1,10 @@
 # Zmeny
 
+## 1.8 (2026-11-10) – treba vymeniť skript tabuľky
+
+- Body za číselnú otázku sa zaokrúhľujú na 0,01 (celé percentá), nie na 0,1. Odpoveď tesne za pásmom plných bodov
+  (napr. odchýlka 10,2 % pri `~10%~25%`) dostane 0,99 b, nie 1 b. Body žiaka sú na stotiny (`7,35/10`).
+
 ## 1.7 (2026-11-10) – treba vymeniť skript tabuľky
 
 - **Hárok Žiaci = zasadací poriadok.** Celú tabuľku zo Skola.xlsx (hárok Sedenie) stačí vložiť do hárka Žiaci: `Trieda | Rad | A | B | A | B …`.

@@ -29,7 +29,7 @@ Prvý odchod z testu (iná karta, iná aplikácia, zamknutie telefónu) strhne 1
   Na veľkých písmenách, diakritike, interpunkcii a medzerách nezáleží. Odpoveď s preklepom je „na kontrolu“ (0 bodov, kým ju učiteľ
   v záložke Otázky neuzná). Uznaná sa pripíše do stĺpca Správna a výsledky sa prepočítajú.
 - **Číselná otázka:** A–F prázdne, v stĺpci Správna číslo, voliteľne s odchýlkou: `1989` presne, `1989~5` ±5, `750000000~20%` ±20 %,
-  `750000000~5%~20%` do ±5 % plné body, potom lineárne menej až po 0 pri ±20 %. Body za otázku na desatiny.
+  `750000000~5%~20%` do ±5 % plné body, potom lineárne menej až po 0 pri ±20 %. Body za otázku na stotiny (celé percentá).
 
 ## Nasadenie skriptu (raz)
 

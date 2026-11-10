@@ -1,5 +1,5 @@
 /* Písomky: spoločné pomôcky (texty v jazykoch, spojenie so skriptom tabuľky, drobnosti pre stránku). */
-var APP = { version: '1.7' };
+var APP = { version: '1.8' };
 
 /* ---------- stránka ---------- */
 function $(id) { return document.getElementById(id); }
@@ -202,14 +202,14 @@ function numSpec(v) {
   if (two && dev[0] >= dev[1]) return { err: 'plné body (prvá odchýlka) musia byť menej ako odchýlka pre nula bodov' };
   return { val: val, full: two ? dev[0] : 0, tol: dev[dev.length - 1], fullP: two ? pct[0] : null, tolP: pct[pct.length - 1] };
 }
-// Body za číselnú odpoveď (0 až 1, na desatiny): v pásme plných bodov 1, potom lineárne menej, od odchýlky tol 0.
+// Body za číselnú odpoveď (0 až 1, na stotiny): v pásme plných bodov 1, potom lineárne menej, od odchýlky tol 0.
 function numPts(q, a) {
   var x = numParse(a);
   if (x === null) return 0;
   var d = Math.abs(x - q.val), eps = 1e-9 * Math.max(1, Math.abs(q.val));
   if (d <= q.full + eps) return 1;
   if (d >= q.tol - eps) return 0;
-  return Math.round((1 - (d - q.full) / (q.tol - q.full)) * 10) / 10;
+  return Math.round((1 - (d - q.full) / (q.tol - q.full)) * 100) / 100;
 }
 // Číslo na zobrazenie: desatinná čiarka, tisíce oddelené medzerou (štvormiestne čísla ako roky bez medzery).
 function numFmt(x) {
@@ -220,8 +220,8 @@ function numFmt(x) {
   var p = s.split('.'), i = p[0].length > 4 ? p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : p[0];
   return (neg ? '-' : '') + i + (p[1] ? ',' + p[1] : '');
 }
-// Body na zobrazenie: 7,3 alebo 8.
-function ptsFmt(p) { return String(Math.round((p || 0) * 10) / 10).replace('.', ','); }
+// Body na zobrazenie: 7,35 alebo 8.
+function ptsFmt(p) { return String(Math.round((p || 0) * 100) / 100).replace('.', ','); }
 // Body za jednu odpoveď: správna 1, nesprávna, na kontrolu alebo bez odpovede 0, číselná podľa odchýlky.
 function ansPts(q, a) {
   if (!q) return 0;
