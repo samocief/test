@@ -151,9 +151,9 @@ function tListToggle(open) {
   if (open) tPreview();
 }
 function qItem(q, noTag) {
-  var opts = q.text ? [el('li', { class: 'ok', text: '✎ ' + (q.acc || []).join('; ') })]
+  var opts = q.num ? [el('li', { class: 'ok', text: '# ' + numText(q) })] : q.text ? [el('li', { class: 'ok', text: '✎ ' + (q.acc || []).join('; ') })]
     : q.opts.map(function (o, i) { return el('li', { class: i === q.ok ? 'ok' : '', text: LETTERS[i] + ') ' + o }); });
-  return el('li', {}, [q.q, q.g && !noTag ? el('span', { class: 'badge g', text: q.g }) : null, q.text ? el('span', { class: 'badge g', text: t('t.text_badge') }) : null,
+  return el('li', {}, [q.q, q.g && !noTag ? el('span', { class: 'badge g', text: q.g }) : null, q.num ? el('span', { class: 'badge g', text: t('t.num_badge') }) : q.text ? el('span', { class: 'badge g', text: t('t.text_badge') }) : null,
     q.img ? el('span', { class: 'small muted', text: ' 🖼' }) : null, el('ul', { class: 'opts2' }, opts)]);
 }
 function tPreview() {
@@ -283,8 +283,9 @@ function keysOf(r) { return r && r.keys ? r.keys : T.cur.d.test.keys; }
 // Body a percentá žiaka podľa aktuálneho kľúča (rovnako ako skript tabuľky). Bez balíka (dozor) sa berie výsledok z tabuľky.
 function resScore(r) {
   var pack = T.cur.pack, keys = keysOf(r);
-  if (!pack) { var m = /(\d+)\s*\/\s*(\d+)/.exec(r.points || ''); return { ok: m ? +m[1] : null, n: keys.length, pct: typeof r.pct === 'number' ? r.pct : null }; }
-  var ok = 0; keys.forEach(function (k) { if (gradeAns(pack.q[k], r.ans[k]) === 'ok') ok++; });
+  if (!pack) { var m = /([\d.,]+)\s*\/\s*(\d+)/.exec(r.points || ''); return { ok: m ? +m[1].replace(',', '.') : null, n: keys.length, pct: typeof r.pct === 'number' ? r.pct : null }; }
+  var ok = 0; keys.forEach(function (k) { ok += ansPts(pack.q[k], r.ans[k]); });
+  ok = Math.round(ok * 10) / 10;
   return { ok: ok, n: keys.length, pct: Math.max(0, (keys.length ? ok / keys.length : 0) - (r.leaves > 0 ? T.cur.d.penalty || 0 : 0)) };
 }
 // Posledný odovzdaný pokus každého žiaka. res = všetky odovzdané (aj učiteľ), stat = bez učiteľa, absent = neprítomní.
@@ -353,7 +354,7 @@ function tRows() {
   T.cur.res.forEach(function (r) { if (!rows.some(function (p) { return p.id.split('#')[0] === r.pupilId; })) rows.push({ id: r.pupilId, label: r.teacher ? t('p.teacher') : r.name, teacher: r.teacher, group: r.group || '' }); });
   return rows.filter(function (p) { return !p.teacher; }).concat(rows.filter(function (p) { return p.teacher; }));
 }
-function resText(sc) { return sc.pct === null ? '' : fmtPct(sc.pct) + (sc.ok !== null ? ' (' + sc.ok + '/' + sc.n + ')' : ''); }
+function resText(sc) { return sc.pct === null ? '' : fmtPct(sc.pct) + (sc.ok !== null ? ' (' + ptsFmt(sc.ok) + '/' + sc.n + ')' : ''); }
 function tOverview() {
   var d = T.cur.d, x = d.test, by = {}, done = 0, writing = 0, absent = 0, total = 0, tb = el('tbody'), seen = {}, list = [];
   T.cur.res.forEach(function (r) { by[r.pupilId] = r; });
@@ -414,7 +415,7 @@ function tCopyResults() {
   tRows().forEach(function (p) {
     var key = p.id.split('#')[0]; if (p.teacher || seen[key]) return; seen[key] = 1;
     var r = by[key], ab = T.cur.absent[key];
-    lines.push([p.label].concat(g ? [r ? r.group : p.group] : [], r ? [r.sc.ok === null ? '' : r.sc.ok, r.sc.pct === null ? '' : Math.round(r.sc.pct * 100)] : [ab ? t('t.st_absent') : '', '']).join('\t'));
+    lines.push([p.label].concat(g ? [r ? r.group : p.group] : [], r ? [r.sc.ok === null ? '' : ptsFmt(r.sc.ok), r.sc.pct === null ? '' : Math.round(r.sc.pct * 100)] : [ab ? t('t.st_absent') : '', '']).join('\t'));
   });
   copyText(lines.join('\n'), 'over-msg', t('t.copied_results'));
 }
@@ -447,6 +448,7 @@ function tQs() {
   $('qs-text-hint').hidden = !x.keys.some(function (k) { return pack.q[k] && pack.q[k].text; });
   var items = x.keys.map(function (k) {
     var q = pack.q[k];
+    if (q.num) return numItem(k, q);
     if (q.text) return textItem(k, q);
     var cnt = q.opts.map(function () { return 0; }), none = 0, n = 0, ok = 0;
     T.cur.stat.forEach(function (r) {
@@ -460,6 +462,7 @@ function tQs() {
   items.sort(function (a, b) { return (b.rev ? 1 : 0) - (a.rev ? 1 : 0) || (a.p === null ? 2 : a.p) - (b.p === null ? 2 : b.p); });
   var box = $('qs-list'); box.innerHTML = '';
   items.forEach(function (it) {
+    if (it.q.num) { box.appendChild(numCard(it)); return; }
     if (it.q.text) { box.appendChild(textCard(it)); return; }
     var max = Math.max(1, it.n), rows = it.q.opts.map(function (o, i) {
       var good = i === it.q.ok;
@@ -472,6 +475,40 @@ function tQs() {
       el('div', { class: 'small muted', text: t('t.qs_count', { n: it.n }) }),
       el('div', { class: 'dist' }, rows)]));
   });
+}
+// Číselná otázka: odpovede žiakov (rovnaké číslo sa zlúči) od najbližšej k správnej, s bodmi; úspešnosť = priemer bodov.
+function numItem(k, q) {
+  var groups = {}, none = 0, n = 0, sum = 0;
+  T.cur.stat.forEach(function (r) {
+    if (keysOf(r).indexOf(k) < 0) return;
+    n++;
+    var a = r.ans[k], st = gradeAns(q, a);
+    if (st === 'none') { none++; return; }
+    var p = ansPts(q, a), x = numParse(a), key = x === null ? '?' + ansKey(a) : String(x);
+    sum += p;
+    var g = groups[key] = groups[key] || { x: x, raw: x === null ? a : numFmt(x), n: 0, p: p, st: st };
+    g.n++;
+  });
+  var list = Object.keys(groups).map(function (key) { return groups[key]; }).sort(function (a, b) {
+    if (a.x === null || b.x === null) return (a.x === null) - (b.x === null);
+    return Math.abs(a.x - q.val) - Math.abs(b.x - q.val);
+  });
+  return { k: k, q: q, n: n, none: none, list: list, p: n ? sum / n : null };
+}
+function numCard(it) {
+  var max = Math.max(1, it.n), q = it.q;
+  var rows = it.list.map(function (g) {
+    return el('div', { class: 'drow nrow ' + g.st }, [el('span', { class: 'tx', text: g.raw }),
+      el('div', { class: 'bar' }, [el('i', { style: 'width:' + (g.n / max * 100) + '%' })]), el('span', { class: 'n', text: String(g.n) }),
+      el('span', { class: 'p', text: t('common.pts', { v: ptsFmt(g.p) }) })]);
+  });
+  if (it.none) rows.push(el('div', { class: 'drow nrow' }, [el('span', { class: 'tx muted', text: t('t.qs_none') }), el('div', { class: 'bar' }, [el('i', { style: 'width:' + (it.none / max * 100) + '%' })]), el('span', { class: 'n', text: String(it.none) }), el('span')]));
+  if (!rows.length) rows.push(el('p', { class: 'small muted', text: t('t.no_results') }));
+  return el('div', { class: 'qs' }, [
+    el('div', { class: 'top row' }, [el('div', { class: 'qq' }, [el('small', { text: qTag(it.k) }), q.q, el('span', { class: 'badge g', text: t('t.num_badge') })]),
+      el('div', { class: 'pc', title: t('t.num_avg'), text: it.p === null ? '–' : fmtPct(it.p) })]),
+    el('div', { class: 'small muted' }, [t('t.qs_count', { n: it.n }), ' · ', t('t.acc_list'), ' ', el('b', { class: 'ok', text: numText(q) })]),
+    el('div', { class: 'dist' }, rows)]);
 }
 // Otázka s dopisovaním: rôzne odpovede žiakov (rovnaké po úprave sa zlúčia) s počtom a hodnotením.
 function textItem(k, q) {

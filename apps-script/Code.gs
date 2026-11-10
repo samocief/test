@@ -19,8 +19,11 @@
  * Od 1.5: otázky s dopisovaním (prázdne stĺpce A–F, v stĺpci Správna jedna alebo viac odpovedí oddelených bodkočiarkou).
  * Porovnáva sa bez ohľadu na veľké písmená, diakritiku a interpunkciu. Odpoveď s preklepom ide učiteľovi na kontrolu
  * (záložka Otázky v aplikácii učiteľa): uznaná sa pridá do stĺpca Správna a výsledky sa prepočítajú.
+ *
+ * Od 1.6: číselné otázky (prázdne A–F, v stĺpci Správna číslo, voliteľne s odchýlkou: 1989~5, 750000000~20%, 750000000~5%~20%).
+ * Body za otázku sú 0 až 1 na desatiny, pri odchýlke klesajú lineárne. Body v hárku výsledkov sú napr. „7,3/10“.
  */
-const VERSION = '1.5';
+const VERSION = '1.6';
 const APP_URL = 'https://samocief.github.io/test/';
 const APP_NAME = 'Písomky';
 
@@ -99,8 +102,94 @@ function gradeText(q, a) {
   }
   return near && (q.rej || []).indexOf(k) < 0 ? 'review' : 'bad';
 }
+/* ---------- číselné otázky (rovnaký kód je v Code.gs aj v js/core.js) ---------- */
+// Číslo napísané žiakom alebo v stĺpci Správna. Medzery sa vynechajú, desatinná čiarka aj bodka, viac rovnakých znakov
+// (750.000.000, 750,000,000) alebo oba druhy naraz (1.234,5) = oddeľovače tisícov. Na konci smie byť tis., mil., mld.
+// Vráti číslo alebo null.
+var NUM_MUL = { tis: 1e3, tisic: 1e3, tisice: 1e3, tisicov: 1e3, mil: 1e6, milion: 1e6, miliony: 1e6, milionov: 1e6,
+  mld: 1e9, miliarda: 1e9, miliardy: 1e9, miliard: 1e9 };
+function numParse(s) {
+  if (typeof s === 'number') return isFinite(s) ? s : null;
+  var x = String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[    ']/g, ' ').replace(/[−–—]/g, '-').trim();
+  var mul = 1, m = /^(.*?\d)\s*([a-z]+)\.?$/.exec(x);
+  if (m) { if (!NUM_MUL[m[2]]) return null; mul = NUM_MUL[m[2]]; x = m[1]; }
+  x = x.replace(/\s+/g, '').replace(/\.$/, '');
+  if (!/^[-+]?(\d[\d.,]*|[.,]\d+)$/.test(x)) return null;
+  var sign = x.charAt(0) === '-' ? -1 : 1;
+  x = x.replace(/^[-+]/, '');
+  var c = x.indexOf(',') >= 0, d = x.indexOf('.') >= 0;
+  if (c && d) {
+    var dec = x.lastIndexOf(',') > x.lastIndexOf('.') ? ',' : '.';
+    x = x.split(dec === ',' ? '.' : ',').join('');
+    if (x.split(dec).length > 2) return null;
+    x = x.replace(dec, '.');
+  } else if (c || d) {
+    var parts = x.split(c ? ',' : '.');
+    if (parts.length > 2) {
+      for (var i = 1; i < parts.length; i++) if (parts[i].length !== 3) return null;
+      x = parts.join('');
+    } else x = parts.join('.');
+  }
+  var n = parseFloat(x);
+  return isNaN(n) ? null : sign * n * mul;
+}
+// Stĺpec Správna pri číselnej otázke: „1989“ presne, „1989~5“ ±5, „750000000~20%“ ±20 %, „750000000~5%~20%“ do ±5 % plné body,
+// potom lineárne menej až po 0 pri ±20 %. Namiesto ~ sa dá napísať aj ±. Text, ktorý nie je číslo, vráti null (otázka na dopísanie);
+// chyba v zápise vráti {err}. Odchýlky sú v spec.full a spec.tol ako čísla, percentá aj v fullP a tolP.
+function numSpec(v) {
+  if (typeof v === 'number') return isFinite(v) ? { val: v, full: 0, tol: 0, fullP: null, tolP: null } : null;
+  var s = String(v == null ? '' : v).trim();
+  if (!s || s.indexOf(';') >= 0) return null;
+  var parts = s.split(/[~±]/), val = numParse(parts[0]);
+  if (parts.length === 1) return val === null ? null : { val: val, full: 0, tol: 0, fullP: null, tolP: null };
+  if (val === null) return { err: 'pred ~ má byť číslo (' + parts[0].trim() + ')' };
+  if (parts.length > 3) return { err: 'najviac dve odchýlky: plné body ~ nula bodov' };
+  var dev = [], pct = [];
+  for (var i = 1; i < parts.length; i++) {
+    var p = parts[i].trim(), isP = /%$/.test(p), n = numParse(p.replace(/%$/, ''));
+    if (n === null || n < 0) return { err: 'odchýlka „' + p + '“ nie je číslo' };
+    if (isP && val === 0) return { err: 'percentá z nuly sa nedajú, napíš odchýlku číslom' };
+    dev.push(isP ? Math.abs(val) * n / 100 : n); pct.push(isP ? n : null);
+  }
+  var two = dev.length === 2;
+  if (two && dev[0] >= dev[1]) return { err: 'plné body (prvá odchýlka) musia byť menej ako odchýlka pre nula bodov' };
+  return { val: val, full: two ? dev[0] : 0, tol: dev[dev.length - 1], fullP: two ? pct[0] : null, tolP: pct[pct.length - 1] };
+}
+// Body za číselnú odpoveď (0 až 1, na desatiny): v pásme plných bodov 1, potom lineárne menej, od odchýlky tol 0.
+function numPts(q, a) {
+  var x = numParse(a);
+  if (x === null) return 0;
+  var d = Math.abs(x - q.val), eps = 1e-9 * Math.max(1, Math.abs(q.val));
+  if (d <= q.full + eps) return 1;
+  if (d >= q.tol - eps) return 0;
+  return Math.round((1 - (d - q.full) / (q.tol - q.full)) * 10) / 10;
+}
+// Číslo na zobrazenie: desatinná čiarka, tisíce oddelené medzerou (štvormiestne čísla ako roky bez medzery).
+function numFmt(x) {
+  if (x === null || x === undefined || !isFinite(x)) return '';
+  var s = String(Math.round(x * 1e6) / 1e6), neg = s.charAt(0) === '-';
+  if (neg) s = s.slice(1);
+  if (/e/.test(s)) return (neg ? '-' : '') + s;
+  var p = s.split('.'), i = p[0].length > 4 ? p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : p[0];
+  return (neg ? '-' : '') + i + (p[1] ? ',' + p[1] : '');
+}
+// Body na zobrazenie: 7,3 alebo 8.
+function ptsFmt(p) { return String(Math.round((p || 0) * 10) / 10).replace('.', ','); }
+// Body za jednu odpoveď: správna 1, nesprávna, na kontrolu alebo bez odpovede 0, číselná podľa odchýlky.
+function ansPts(q, a) {
+  if (!q) return 0;
+  if (q.num) return typeof a === 'string' ? numPts(q, a) : 0;
+  return gradeAns(q, a) === 'ok' ? 1 : 0;
+}
+// Hodnotenie odpovede: 'none' bez odpovede, 'ok' správne, 'part' číselná s časťou bodu, 'review' na kontrolu (líši sa o preklep), 'bad' nesprávne.
 function gradeAns(q, a) {
   if (!q) return 'none';
+  if (q.num) {
+    if (typeof a !== 'string' || !a.trim()) return 'none';
+    var p = numPts(q, a);
+    return p >= 1 ? 'ok' : p > 0 ? 'part' : 'bad';
+  }
   if (q.text) return typeof a === 'string' ? gradeText(q, a) : 'none';
   if (typeof a !== 'number') return 'none';
   return a === q.ok ? 'ok' : 'bad';
@@ -240,7 +329,7 @@ function newTeacherKey() {
 function checkQuestions() {
   ensureBaseSheets_();
   const b = readBank_(), ui = SpreadsheetApp.getUi();
-  const lines = b.tests.map(function (x) { return '• ' + x.name + ': ' + x.n + ' otázok' + (x.txt ? ', z toho na dopísanie ' + x.txt : '') + (x.A || x.B ? ' (len A: ' + x.A + ', len B: ' + x.B + ', obe: ' + x.both + ')' : ''); });
+  const lines = b.tests.map(function (x) { return '• ' + x.name + ': ' + x.n + ' otázok' + (x.txt ? ', na dopísanie ' + x.txt : '') + (x.num ? ', číselné ' + x.num : '') + (x.A || x.B ? ' (len A: ' + x.A + ', len B: ' + x.B + ', obe: ' + x.both + ')' : ''); });
   const errs = b.errors.slice(0, 25).map(function (e) { return '• riadok ' + e.row + ': ' + e.msg; });
   ui.alert('Kontrola otázok', (lines.length ? lines.join('\n') : 'V hárku Otázky zatiaľ nie je žiadna aktívna otázka.') +
     (errs.length ? '\n\nTieto riadky sa do testu nedostanú:\n' + errs.join('\n') + (b.errors.length > 25 ? '\n…' : '') : '\n\nBez chýb.'), ui.ButtonSet.OK);
@@ -323,6 +412,7 @@ function imageUrl_(v) {
 }
 // Hárok Otázky: Test | Skupina (A, B alebo prázdne = obe) | Otázka | A … F (možnosti, aspoň dve) | Správna (písmeno) | Obrázok | Aktívna.
 // Otázka s dopisovaním: A … F prázdne, v stĺpci Správna správne odpovede oddelené bodkočiarkou („Dunaj; Danube“).
+// Číselná otázka: A … F prázdne, v stĺpci Správna číslo, voliteľne s odchýlkou (numSpec).
 // Vráti testy (podľa stĺpca Test) s otázkami a zoznam chýb v riadkoch. Kľúč otázky je číslo riadku v hárku.
 function readBank_() {
   const sh = sheetByNames_(SH.questions);
@@ -346,7 +436,12 @@ function readBank_() {
     const g = gn === 'a' ? 'A' : gn === 'b' ? 'B' : '';
     const img = cI >= 0 ? imageUrl_(row[cI]) : '';
     let item;
-    if (!opts.length) {
+    const ns = !opts.length ? numSpec(row[cK]) : null;
+    if (ns && ns.err) { errors.push({ row: r, msg: 'číselná odpoveď: ' + ns.err + ' (' + name + ')' }); return; }
+    if (ns) {
+      // číselná otázka: presná hodnota, voliteľne s odchýlkou
+      item = { k: 'r' + r, row: r, g: g, q: text, opts: [], ok: null, num: 1, val: ns.val, full: ns.full, tol: ns.tol, fullP: ns.fullP, tolP: ns.tolP, img: img };
+    } else if (!opts.length) {
       // otázka s dopisovaním
       const acc = splitAcc_(row[cK]);
       if (!acc.length) { errors.push({ row: r, msg: 'chýbajú možnosti A–F aj správna odpoveď na dopísanie (' + name + ')' }); return; }
@@ -367,7 +462,8 @@ function readBank_() {
     errors: errors,
     tests: order.map(function (k) {
       const x = tests[k], A = x.qs.filter(function (q) { return q.g === 'A'; }).length, B = x.qs.filter(function (q) { return q.g === 'B'; }).length;
-      return { name: x.name, n: x.qs.length, A: A, B: B, both: x.qs.length - A - B, txt: x.qs.filter(function (q) { return q.text; }).length, qs: x.qs };
+      return { name: x.name, n: x.qs.length, A: A, B: B, both: x.qs.length - A - B, txt: x.qs.filter(function (q) { return q.text; }).length,
+        num: x.qs.filter(function (q) { return q.num; }).length, qs: x.qs };
     })
   };
 }
@@ -499,7 +595,13 @@ function loadPack_(id) {
 // Otázky pre žiaka: bez správnej odpovede.
 function publicQs_(pack, keys) {
   const out = {};
-  keys.forEach(function (k) { const q = pack.q[k]; if (q) out[k] = q.text ? { q: q.q, opts: [], text: 1, img: q.img || '' } : { q: q.q, opts: q.opts, img: q.img || '' }; });
+  keys.forEach(function (k) {
+    const q = pack.q[k];
+    if (!q) return;
+    // číselná: žiak píše do políčka ako pri dopisovaní; neg = správna hodnota je záporná (telefón ukáže klávesnicu s mínusom)
+    if (q.num) out[k] = { q: q.q, opts: [], text: 1, num: 1, neg: q.val < 0 ? 1 : 0, img: q.img || '' };
+    else out[k] = q.text ? { q: q.q, opts: [], text: 1, img: q.img || '' } : { q: q.q, opts: q.opts, img: q.img || '' };
+  });
   return out;
 }
 
@@ -554,6 +656,7 @@ function createResultsSheet_(test, pack) {
   sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold').setBackground('#d9d9d9').setWrap(true);
   sh.setFrozenRows(1); sh.setFrozenColumns(2);
   sh.getRange(2, 4, 500, 1).setNumberFormat('0%');
+  sh.getRange(2, 5, 500, 1).setNumberFormat('@');   // body „7,3/10“ ako text (inak by z nich tabuľka urobila dátum)
   if (names.length) {
     sh.getRange(2, RES_FIXED.length + 1, 500, names.length).setHorizontalAlignment('center');
     // celé znenie otázky s možnosťami ako poznámka k hlavičke
@@ -563,11 +666,20 @@ function createResultsSheet_(test, pack) {
 }
 function resultsSheet_(test, pack) { return resultsGet_(test.id) || createResultsSheet_(test, pack || loadPack_(test.id)); }
 // Text do bunky otázky: písmeno odpovede (podľa hárka Otázky) alebo napísaný text so značkou ✓ správne, ✗ nesprávne, ? na kontrolu.
+// Číselná odpoveď: číslo tak, ako ho aplikácia prečítala, pri časti bodu aj body („780 000 000 (0,9 b)“).
 const MARK = { ok: ' ✓', bad: ' ✗', review: ' ?' };
 function cellFor_(q, a, ended) {
   const st = gradeAns(q, a);
   if (st === 'none') return ended ? WHY.ended : WHY.none;
+  if (q.num) return numAns_(a) + (st === 'part' ? ' (' + ptsFmt(numPts(q, a)) + ' b)' : MARK[st]);
   return (q.text ? (a.length > 30 ? a.slice(0, 29) + '…' : a) : LETTERS[a]) + MARK[st];
+}
+// Odpoveď žiaka na číselnú otázku: prečítané číslo, inak napísaný text.
+function numAns_(a) { const x = numParse(a); return x === null ? String(a).slice(0, 30) : numFmt(x); }
+// Správna číselná odpoveď slovami: „750 000 000 ± 20 % (plné body do ± 5 %)“.
+function numText_(q) {
+  const d = function (abs, p) { return p !== null && p !== undefined ? numFmt(p) + ' %' : numFmt(abs); };
+  return numFmt(q.val) + (q.tol > 0 ? ' ± ' + d(q.tol, q.tolP) : '') + (q.full > 0 ? ' (plné body do ± ' + d(q.full, q.fullP) + ')' : '');
 }
 // Poznámky k bunkám: celé znenie odpovede žiaka a správnej odpovede (písmená podľa hárka Otázky).
 function optText_(q, i) { return LETTERS[i] + ') ' + q.opts[i]; }
@@ -575,6 +687,11 @@ function accText_(q) { return ansAccepted(q).join('; '); }
 function noteFor_(q, a) {
   if (!q) return '';
   const st = gradeAns(q, a);
+  if (q.num) {
+    const ok = 'Správne: ' + numText_(q);
+    if (st === 'none') return 'Bez odpovede\n' + ok;
+    return 'Napísal: ' + a + (numParse(a) === null ? ' (nie je číslo)' : '') + '\nBody: ' + ptsFmt(numPts(q, a)) + '\n' + ok;
+  }
   if (q.text) {
     const ok = 'Správne: ' + accText_(q);
     if (st === 'none') return 'Bez odpovede\n' + ok;
@@ -586,14 +703,16 @@ function noteFor_(q, a) {
 }
 function headNote_(q) {
   if (!q) return '';
+  if (q.num) return q.q + '\n\nČíselná. Správne: ' + numText_(q);
   if (q.text) return q.q + '\n\nNa dopísanie. Správne: ' + accText_(q);
   return q.q + '\n\n' + q.opts.map(function (o, i) { return LETTERS[i] + ') ' + o + (i === q.ok ? '  ✓' : ''); }).join('\n');
 }
-// Body a percentá: správne odpovede / počet otázok žiaka, za prvý odchod mínus LEAVE_PENALTY (najmenej 0).
-// Odpoveď na kontrolu je za 0 bodov, kým ju učiteľ neuzná.
+// Body a percentá: body / počet otázok žiaka, za prvý odchod mínus LEAVE_PENALTY (najmenej 0).
+// Odpoveď na kontrolu je za 0 bodov, kým ju učiteľ neuzná. Číselná otázka môže dať časť bodu (na desatiny).
 function scoreOf_(pack, keys, ans, leaves) {
   let ok = 0;
-  keys.forEach(function (k) { if (gradeAns(pack.q[k], ans[k]) === 'ok') ok++; });
+  keys.forEach(function (k) { ok += ansPts(pack.q[k], ans[k]); });
+  ok = Math.round(ok * 10) / 10;
   const p = keys.length ? ok / keys.length : 0;
   return { ok: ok, n: keys.length, pct: Math.max(0, p - (leaves > 0 ? LEAVE_PENALTY : 0)) };
 }
@@ -604,6 +723,7 @@ function appendResult_(sh, vals, cells, notes) {
   (cells || []).forEach(function (v, i) { if (first + i < row.length) row[first + i] = v; });
   (notes || []).forEach(function (v, i) { if (first + i < row.length) nrow[first + i] = v; });
   const r = sh.getLastRow() + 1, rng = sh.getRange(r, 1, 1, row.length);
+  sh.getRange(r, t.need('body') + 1).setNumberFormat('@');
   rng.setValues([row]);
   if (notes && notes.length) rng.setNotes([nrow]);
 }
@@ -659,12 +779,12 @@ function cleanAns_(ans, keys, pack) {
   keys.forEach(function (k) {
     const a = ans[k], q = pack && pack.q[k];
     if (typeof a === 'string') {
-      if (q && !q.text) return;
+      if (q && !q.text && !q.num) return;
       const s = a.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, TEXT_MAX);
       if (s) out[k] = s;
       return;
     }
-    if (q && q.text) return;
+    if (q && (q.text || q.num)) return;
     if (typeof a === 'number' && a >= 0 && a < LETTERS.length && Math.floor(a) === a && (!q || a < q.opts.length)) out[k] = a;
   });
   return out;
@@ -782,7 +902,7 @@ function pupilSubmit_(req) {
     if (ended) flags.push('test ukončený po druhom odchode');
     if (st && Date.now() > st[0] + test.total * 60000 + GRACE_MS) flags.push('odovzdané po čase (+' + Math.round((Date.now() - st[0]) / 60000 - test.total) + ' min)');
     if (miss.length) flags.push((ended ? 'nedokončené: ' : 'bez odpovede: ') + miss.length + '×');
-    appendResult_(sh, { odoslane: now_(), ziak: me.label, skupina: group, vysledok: sc.pct, body: sc.ok + '/' + sc.n, odchody: leaves, odpovede: JSON.stringify(ans), priznak: flags.join('; ') }, cells, notes);
+    appendResult_(sh, { odoslane: now_(), ziak: me.label, skupina: group, vysledok: sc.pct, body: ptsFmt(sc.ok) + '/' + sc.n, odchody: leaves, odpovede: JSON.stringify(ans), priznak: flags.join('; ') }, cells, notes);
     L.p[pupilId] = { d: device, t: e ? e.t : now_('HH:mm:ss'), n: me.label, done: 1 };
     saveLogins_(testId, L);
   });
@@ -810,9 +930,11 @@ function pupilResult_(req) {
   const out = { name: mine.name, cls: test.cls, title: test.title, sent: mine.sent, group: mine.group, ok: sc.ok, n: sc.n, pct: sc.pct, leaves: mine.leaves, penalty: LEAVE_PENALTY,
     ended: mine.ended, reveal: test.reveal, left: left };
   if (test.reveal === 'all') {
-    out.keys = mine.keys; out.ans = mine.ans; out.qs = {}; out.st = {};
+    out.keys = mine.keys; out.ans = mine.ans; out.qs = {}; out.st = {}; out.pts = {};
     mine.keys.forEach(function (k) {
       const q = pack.q[k]; if (!q) return;
+      out.pts[k] = ansPts(q, mine.ans[k]);
+      if (q.num) { out.qs[k] = { q: q.q, opts: [], text: 1, num: 1, ok: numText_(q), img: q.img || '' }; out.st[k] = gradeAns(q, mine.ans[k]); return; }
       out.qs[k] = q.text ? { q: q.q, opts: [], text: 1, acc: ansAccepted(q), img: q.img || '' } : { q: q.q, opts: q.opts, img: q.img || '', ok: q.ok };
       out.st[k] = gradeAns(q, mine.ans[k]);
     });
@@ -907,15 +1029,22 @@ function pupilSheetHtml_(test, pack, r) {
     '.rev{background:#fbefd0;color:#8a5a00}.o{margin:1.5pt 0 1.5pt 10pt}.o.right{color:#1d6b38;font-weight:bold}.o.wrong{color:#9c2a2a;text-decoration:line-through}' +
     '.note{color:#56666a;font-size:9pt;margin-top:10pt}img{max-width:300pt;max-height:180pt;margin:3pt 0}</style></head><body>';
   html += '<h1>' + h_(r.name) + '</h1><div class="meta">' + h_([test.title, 'trieda ' + test.cls, r.group ? 'skupina ' + r.group : '', 'odovzdané ' + r.sent].filter(String).join(' · ')) + '</div>';
-  html += '<div class="score">Výsledok: ' + Math.round(sc.pct * 100) + ' % (' + sc.ok + ' z ' + sc.n + ')' +
+  html += '<div class="score">Výsledok: ' + Math.round(sc.pct * 100) + ' % (' + ptsFmt(sc.ok) + ' b z ' + sc.n + ')' +
     (r.leaves > 0 ? ' <span style="font-weight:normal;font-size:10pt">· za odchod z testu −' + Math.round(LEAVE_PENALTY * 100) + ' %</span>' : '') + '</div>';
   r.keys.forEach(function (k, i) {
     const q = pack.q[k]; if (!q) return;
     const a = r.ans[k], st = gradeAns(q, a);
     const tag = { none: '<span class="tag none">bez odpovede</span>', ok: '<span class="tag ok">správne</span>', bad: '<span class="tag bad">nesprávne</span>',
-      review: '<span class="tag rev">na kontrolu</span>' }[st];
+      review: '<span class="tag rev">na kontrolu</span>', part: '<span class="tag rev">' + ptsFmt(ansPts(q, a)) + ' b</span>' }[st];
     const img = q.img ? imgData_(q.img) : '';
     html += '<div class="q"><div class="qt">' + (i + 1) + '. ' + h_(q.q) + tag + '</div>' + (img ? '<img src="' + img + '">' : '');
+    if (q.num) {
+      if (st !== 'none') html += '<div class="o ' + (st === 'ok' ? 'right' : st === 'bad' ? 'wrong' : '') + '">Odpoveď žiaka: ' + h_(a) +
+        (numParse(a) !== null && numFmt(numParse(a)) !== a ? ' (= ' + h_(numFmt(numParse(a))) + ')' : '') + (st === 'ok' ? ' ✓' : st === 'part' ? ' · ' + ptsFmt(ansPts(q, a)) + ' b' : ' ✗') + '</div>';
+      if (st !== 'ok') html += '<div class="o right">Správne: ' + h_(numText_(q)) + '</div>';
+      html += '</div>';
+      return;
+    }
     if (q.text) {
       if (st !== 'none') html += '<div class="o ' + (st === 'ok' ? 'right' : st === 'bad' ? 'wrong' : '') + '">Odpoveď žiaka: ' + h_(a) + (st === 'ok' ? ' ✓' : st === 'review' ? ' (na kontrolu)' : ' ✗') + '</div>';
       if (st !== 'ok') html += '<div class="o right">Správne: ' + h_(accText_(q)) + '</div>';
@@ -976,7 +1105,10 @@ function tCreateTest_(req) {
   if (!keysA.length) fail_('no_questions', bank.name);
   const total = Math.max(1, Math.min(240, Math.round(Number(cfg.total) || 10)));
   const pack = { v: 1, bank: bank.name, q: {} };
-  bank.qs.forEach(function (q) { if (keysA.indexOf(q.k) >= 0 || keysB.indexOf(q.k) >= 0) pack.q[q.k] = q.text ? { q: q.q, opts: [], ok: null, text: 1, acc: q.acc, add: [], rej: [], img: q.img, g: q.g, row: q.row } : { q: q.q, opts: q.opts, ok: q.ok, img: q.img, g: q.g, row: q.row }; });
+  bank.qs.forEach(function (q) {
+    if (keysA.indexOf(q.k) < 0 && keysB.indexOf(q.k) < 0) return;
+    if (q.num) { pack.q[q.k] = { q: q.q, opts: [], ok: null, num: 1, val: q.val, full: q.full, tol: q.tol, fullP: q.fullP, tolP: q.tolP, img: q.img, g: q.g, row: q.row }; return; }
+    pack.q[q.k] = q.text ? { q: q.q, opts: [], ok: null, text: 1, acc: q.acc, add: [], rej: [], img: q.img, g: q.g, row: q.row } : { q: q.q, opts: q.opts, ok: q.ok, img: q.img, g: q.g, row: q.row }; });
   return withLock_(function () {
     const t = testsTable_();
     // id: trieda_mesiac-deň_hodina:minúta, napr. 9A_10-25_19:49 (pri zhode sa pridá písmeno: 9A_10-25_19:49a)
@@ -1062,7 +1194,7 @@ function recalcQ_(test, pack, k) {
   readResults_(test).forEach(function (r) {
     if (r.absent) return;
     const v = vals[r.row - 2], sc = scoreOf_(pack, r.keys, r.ans, r.leaves);
-    v[cR] = sc.pct; v[cB] = sc.ok + '/' + sc.n;
+    v[cR] = sc.pct; v[cB] = ptsFmt(sc.ok) + '/' + sc.n;
     if (r.keys.indexOf(k) >= 0) { v[ci] = cellFor_(q, r.ans[k], r.ended); notes[r.row - 2][0] = noteFor_(q, r.ans[k]); }
     n++;
   });

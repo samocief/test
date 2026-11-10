@@ -1,6 +1,6 @@
 # Písomky
 
-Online písomky s možnosťami A–F aj s dopisovaním krátkej odpovede pre žiakov na telefóne. Otázky, žiaci aj výsledky sú v Google Tabuľke učiteľa,
+Online písomky s možnosťami A–F, s dopisovaním krátkej odpovede aj s číselnou odpoveďou pre žiakov na telefóne. Otázky, žiaci aj výsledky sú v Google Tabuľke učiteľa,
 aplikácia beží na GitHub Pages: <https://samocief.github.io/test/>.
 
 Funguje rovnako ako písomka v [Slepej mape](https://github.com/samocief/blindmap): žiaci naskenujú QR kód, vyberú svoje meno,
@@ -11,7 +11,7 @@ Prvý odchod z testu (iná karta, iná aplikácia, zamknutie telefónu) strhne 1
 
 | Hárok | Kto ho píše | Obsah |
 |---|---|---|
-| **Otázky** | učiteľ | Test, Skupina (A/B/prázdne = obe), Otázka, A–F (aspoň dve, pri dopisovaní prázdne), Správna (písmeno alebo odpovede oddelené `;`), Obrázok (odkaz), Aktívna |
+| **Otázky** | učiteľ | Test, Skupina (A/B/prázdne = obe), Otázka, A–F (aspoň dve, pri dopisovaní prázdne), Správna (písmeno, odpovede oddelené `;` alebo číslo s odchýlkou `~`), Obrázok (odkaz), Aktívna |
 | **Žiaci** | učiteľ | Trieda, Meno („Priezvisko Meno“), Skupina (A/B), voliteľne Aktívny |
 | Testy, Res_…, _balíky | skript | spustené písomky, výsledky (písmeno alebo napísaná odpoveď, ✓ / ✗ / ? na kontrolu), snímka otázok |
 
@@ -27,6 +27,8 @@ Prvý odchod z testu (iná karta, iná aplikácia, zamknutie telefónu) strhne 1
 - **Otázka s dopisovaním:** A–F prázdne, v stĺpci Správna jedna alebo viac správnych odpovedí oddelených bodkočiarkou (`Dunaj; Danube`).
   Na veľkých písmenách, diakritike, interpunkcii a medzerách nezáleží. Odpoveď s preklepom je „na kontrolu“ (0 bodov, kým ju učiteľ
   v záložke Otázky neuzná). Uznaná sa pripíše do stĺpca Správna a výsledky sa prepočítajú.
+- **Číselná otázka:** A–F prázdne, v stĺpci Správna číslo, voliteľne s odchýlkou: `1989` presne, `1989~5` ±5, `750000000~20%` ±20 %,
+  `750000000~5%~20%` do ±5 % plné body, potom lineárne menej až po 0 pri ±20 %. Body za otázku na desatiny.
 
 ## Nasadenie skriptu (raz)
 

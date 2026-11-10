@@ -1,5 +1,17 @@
 # Zmeny
 
+## 1.6 (2026-11-10) – treba vymeniť skript tabuľky
+
+- **Číselné otázky.** A–F prázdne, v stĺpci Správna číslo: `1989` (presne), `1989~5` (±5), `750000000~20%` (±20 %),
+  `750000000~5%~20%` (do ±5 % plné body, potom lineárne menej až po 0 bodov pri ±20 %). Namiesto `~` sa dá napísať aj `±`,
+  v čísle smú byť medzery a desatinná čiarka. Body za otázku sa zaokrúhľujú na 0,1.
+- Žiak má pri číselnej otázke klávesnicu s číslicami a pod políčkom vidí, ako test číslo prečítal (`= 750 000 000`).
+  Prijme sa aj `750.000.000`, `1,5 mld.` alebo `750 mil.`.
+- Body v hárku výsledkov, v aplikácii učiteľa, v PDF aj u žiaka sú na desatiny (`7,3/10`). Bunka číselnej otázky: prečítané číslo
+  a ✓ / ✗ alebo body (`780 000 000 (0,9 b)`). V záložke Otázky sú odpovede od najbližšej k správnej a úspešnosť je priemer bodov.
+- Samotné číslo v stĺpci Správna (napr. `1989`) je odteraz číselná otázka (predtým dopisovanie): `1 989` alebo `1989.` je tiež správne.
+- Chybný zápis (napr. prvá odchýlka väčšia ako druhá) ukáže Písomky → Skontrolovať otázky.
+
 ## 1.5 (2026-11-09) – treba vymeniť skript tabuľky
 
 - **Otázky s dopisovaním.** V hárku Otázky nechaj A–F prázdne a do stĺpca Správna napíš správnu odpoveď, viac odpovedí oddeľ

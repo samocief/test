@@ -123,7 +123,8 @@ function pupilIntro() {
   $('p-intro-hello').textContent = t('p.hello', { name: greetName(S) });
   $('p-intro-sub').textContent = [P.info.title, S.group ? t('p.group', { g: S.group }) : ''].filter(Boolean).join(' · ');
   $('p-intro-n').innerHTML = esc(t('p.intro_n', { n: S.order.length, min: S.total })).replace(/\*(.+?)\*/g, '<b>$1</b>');
-  $('p-intro-text').hidden = !S.order.some(function (k) { return P.qs[k] && P.qs[k].text; });
+  $('p-intro-text').hidden = !S.order.some(function (k) { return P.qs[k] && P.qs[k].text && !P.qs[k].num; });
+  $('p-intro-num').hidden = !S.order.some(function (k) { return P.qs[k] && P.qs[k].num; });
   $('p-intro-leave').textContent = t('p.rule_leave', { pct: Math.round(P.penalty * 100) });
   $('p-intro-wake').textContent = t('wakeLock' in navigator ? 'p.rule_lock' : 'p.rule_lock_old');
   $('p-intro-err').hidden = true;
@@ -179,6 +180,10 @@ function pupilOpts() {
   if (q.text) {
     var inp = $('g-input'), v = typeof S.ans[k] === 'string' ? S.ans[k] : '';
     if (inp.dataset.k !== k || document.activeElement !== inp) { inp.value = v; inp.dataset.k = k; }
+    // číselná otázka: klávesnica s číslicami (so zápornou správnou hodnotou celá, kvôli mínusu) a náhľad prečítaného čísla
+    inp.inputMode = q.num && !q.neg ? 'decimal' : 'text';
+    inp.placeholder = t(q.num ? 'p.num_ph' : 'p.text_ph');
+    pupilNumPrev(q, v);
     $('g-msg').textContent = v ? t('p.ans_saved') : t('p.write');
     return;
   }
@@ -202,6 +207,14 @@ function pupilNav() {
 }
 function pupilGo(i) { var S = P.S; if (i < 0 || i >= S.order.length) return; S.idx = i; pSave(); pupilQuestion(); }
 function pupilAnswered() { var S = P.S; return S.order.filter(function (k) { return S.ans[k] !== undefined; }).length; }
+// Pod políčkom číselnej otázky: ako test číslo prečítal („= 750 000 000“), aby žiak videl, či nespravil chybu v nulách.
+function pupilNumPrev(q, v) {
+  var box = $('g-num');
+  if (!q.num || !v) { box.hidden = true; return; }
+  var x = numParse(v);
+  box.textContent = x === null ? t('p.num_bad') : t('p.num_is', { v: numFmt(x) });
+  box.className = 'nprev' + (x === null ? ' bad' : ''); box.hidden = false;
+}
 // Písanie odpovede: ukladá sa priebežne, prázdne políčko = bez odpovede.
 function pupilType() {
   if (P.phase !== 'test' || $('p-game').hidden) return;
@@ -210,6 +223,7 @@ function pupilType() {
   var v = inp.value.replace(/\s+/g, ' ').trim().slice(0, 100), had = S.ans[k] !== undefined;
   if (v) S.ans[k] = v; else delete S.ans[k];
   pSave();
+  pupilNumPrev(P.qs[k], v);
   $('g-msg').textContent = v ? t('p.ans_saved') : t('p.write');
   if (had !== !!v) { pupilNav(); if (S.idx + 1 >= S.order.length) $('g-btn').classList.toggle('primary', pupilAnswered() === S.order.length); }
   pupilMeters(); pupilQueueSave();
@@ -415,7 +429,7 @@ async function pupilResults() {
   $('r-title').textContent = R.name;
   $('r-sub').textContent = [R.title, t('p.class', { cls: R.cls }), R.group ? t('p.group', { g: R.group }) : ''].filter(Boolean).join(' · ');
   $('r-pct').textContent = fmtPct(R.pct);
-  $('r-points').textContent = t('p.res_points', { ok: R.ok, n: R.n });
+  $('r-points').textContent = t('p.res_points', { ok: ptsFmt(R.ok), n: R.n });
   $('r-penalty').textContent = R.leaves > 0 ? t('p.res_penalty', { pct: Math.round((R.penalty || P.penalty) * 100) }) : '';
   $('r-penalty').hidden = !(R.leaves > 0);
   var list = $('r-list'); list.innerHTML = '';
@@ -427,7 +441,17 @@ async function pupilResults() {
       var q = R.qs[k], a = R.ans[k], st = R.st && R.st[k] ? R.st[k] : gradeAns(q, a), good = st === 'ok';
       var opt = saved.opt && saved.opt[k] && saved.opt[k].length === q.opts.length ? saved.opt[k] : q.opts.map(function (x, j) { return j; });
       var ul = el('ul');
-      var stText = good ? t('p.res_good') : st === 'none' ? t('p.res_none') : st === 'review' ? t('p.res_review') : t('p.res_bad');
+      var stText = good ? t('p.res_good') : st === 'none' ? t('p.res_none') : st === 'review' ? t('p.res_review') : st === 'part' ? t('p.res_part', { p: t('common.pts', { v: ptsFmt(R.pts ? R.pts[k] : 0) }) }) : t('p.res_bad');
+      if (q.num) {
+        var x = numParse(a), shown = x === null ? a : numFmt(x);
+        if (st !== 'none') ul.appendChild(el('li', { class: good ? 'right' : st === 'part' ? 'part' : 'wrong' }, [el('b', { text: '#' }), el('span', { text: shown }),
+          el('span', { class: 'why', text: good ? t('p.res_yours_ok') : t('p.res_yours_pts', { p: t('common.pts', { v: ptsFmt(R.pts ? R.pts[k] : 0) }) }) })]));
+        if (!good) ul.appendChild(el('li', { class: 'right' }, [el('b', { text: '✓' }), el('span', { text: q.ok }), el('span', { class: 'why', text: t('p.res_correct') })]));
+        list.appendChild(el('li', { class: 'rq ' + (good ? 'hit' : st === 'part' ? 'part' : 'miss') }, [
+          el('div', { class: 'qq' }, [el('small', { text: t('p.question_n', { n: i + 1 }) + ' · ' + stText }), q.q]),
+          q.img ? qImage(q.img) : null, ul]));
+        return;
+      }
       if (q.text) {
         if (st !== 'none') ul.appendChild(el('li', { class: good ? 'right' : st === 'review' ? 'rev' : 'wrong' }, [el('b', { text: '✎' }), el('span', { text: a }),
           el('span', { class: 'why', text: good ? t('p.res_yours_ok') : st === 'review' ? t('p.res_yours_rev') : t('p.res_yours') })]));

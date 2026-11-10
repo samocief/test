@@ -1,5 +1,5 @@
 /* Písomky: spoločné pomôcky (texty v jazykoch, spojenie so skriptom tabuľky, drobnosti pre stránku). */
-var APP = { version: '1.5' };
+var APP = { version: '1.6' };
 
 /* ---------- stránka ---------- */
 function $(id) { return document.getElementById(id); }
@@ -148,11 +148,103 @@ function gradeText(q, a) {
   }
   return near && (q.rej || []).indexOf(k) < 0 ? 'review' : 'bad';
 }
+/* ---------- číselné otázky (rovnaký kód je v Code.gs aj v js/core.js) ---------- */
+// Číslo napísané žiakom alebo v stĺpci Správna. Medzery sa vynechajú, desatinná čiarka aj bodka, viac rovnakých znakov
+// (750.000.000, 750,000,000) alebo oba druhy naraz (1.234,5) = oddeľovače tisícov. Na konci smie byť tis., mil., mld.
+// Vráti číslo alebo null.
+var NUM_MUL = { tis: 1e3, tisic: 1e3, tisice: 1e3, tisicov: 1e3, mil: 1e6, milion: 1e6, miliony: 1e6, milionov: 1e6,
+  mld: 1e9, miliarda: 1e9, miliardy: 1e9, miliard: 1e9 };
+function numParse(s) {
+  if (typeof s === 'number') return isFinite(s) ? s : null;
+  var x = String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[    ']/g, ' ').replace(/[−–—]/g, '-').trim();
+  var mul = 1, m = /^(.*?\d)\s*([a-z]+)\.?$/.exec(x);
+  if (m) { if (!NUM_MUL[m[2]]) return null; mul = NUM_MUL[m[2]]; x = m[1]; }
+  x = x.replace(/\s+/g, '').replace(/\.$/, '');
+  if (!/^[-+]?(\d[\d.,]*|[.,]\d+)$/.test(x)) return null;
+  var sign = x.charAt(0) === '-' ? -1 : 1;
+  x = x.replace(/^[-+]/, '');
+  var c = x.indexOf(',') >= 0, d = x.indexOf('.') >= 0;
+  if (c && d) {
+    var dec = x.lastIndexOf(',') > x.lastIndexOf('.') ? ',' : '.';
+    x = x.split(dec === ',' ? '.' : ',').join('');
+    if (x.split(dec).length > 2) return null;
+    x = x.replace(dec, '.');
+  } else if (c || d) {
+    var parts = x.split(c ? ',' : '.');
+    if (parts.length > 2) {
+      for (var i = 1; i < parts.length; i++) if (parts[i].length !== 3) return null;
+      x = parts.join('');
+    } else x = parts.join('.');
+  }
+  var n = parseFloat(x);
+  return isNaN(n) ? null : sign * n * mul;
+}
+// Stĺpec Správna pri číselnej otázke: „1989“ presne, „1989~5“ ±5, „750000000~20%“ ±20 %, „750000000~5%~20%“ do ±5 % plné body,
+// potom lineárne menej až po 0 pri ±20 %. Namiesto ~ sa dá napísať aj ±. Text, ktorý nie je číslo, vráti null (otázka na dopísanie);
+// chyba v zápise vráti {err}. Odchýlky sú v spec.full a spec.tol ako čísla, percentá aj v fullP a tolP.
+function numSpec(v) {
+  if (typeof v === 'number') return isFinite(v) ? { val: v, full: 0, tol: 0, fullP: null, tolP: null } : null;
+  var s = String(v == null ? '' : v).trim();
+  if (!s || s.indexOf(';') >= 0) return null;
+  var parts = s.split(/[~±]/), val = numParse(parts[0]);
+  if (parts.length === 1) return val === null ? null : { val: val, full: 0, tol: 0, fullP: null, tolP: null };
+  if (val === null) return { err: 'pred ~ má byť číslo (' + parts[0].trim() + ')' };
+  if (parts.length > 3) return { err: 'najviac dve odchýlky: plné body ~ nula bodov' };
+  var dev = [], pct = [];
+  for (var i = 1; i < parts.length; i++) {
+    var p = parts[i].trim(), isP = /%$/.test(p), n = numParse(p.replace(/%$/, ''));
+    if (n === null || n < 0) return { err: 'odchýlka „' + p + '“ nie je číslo' };
+    if (isP && val === 0) return { err: 'percentá z nuly sa nedajú, napíš odchýlku číslom' };
+    dev.push(isP ? Math.abs(val) * n / 100 : n); pct.push(isP ? n : null);
+  }
+  var two = dev.length === 2;
+  if (two && dev[0] >= dev[1]) return { err: 'plné body (prvá odchýlka) musia byť menej ako odchýlka pre nula bodov' };
+  return { val: val, full: two ? dev[0] : 0, tol: dev[dev.length - 1], fullP: two ? pct[0] : null, tolP: pct[pct.length - 1] };
+}
+// Body za číselnú odpoveď (0 až 1, na desatiny): v pásme plných bodov 1, potom lineárne menej, od odchýlky tol 0.
+function numPts(q, a) {
+  var x = numParse(a);
+  if (x === null) return 0;
+  var d = Math.abs(x - q.val), eps = 1e-9 * Math.max(1, Math.abs(q.val));
+  if (d <= q.full + eps) return 1;
+  if (d >= q.tol - eps) return 0;
+  return Math.round((1 - (d - q.full) / (q.tol - q.full)) * 10) / 10;
+}
+// Číslo na zobrazenie: desatinná čiarka, tisíce oddelené medzerou (štvormiestne čísla ako roky bez medzery).
+function numFmt(x) {
+  if (x === null || x === undefined || !isFinite(x)) return '';
+  var s = String(Math.round(x * 1e6) / 1e6), neg = s.charAt(0) === '-';
+  if (neg) s = s.slice(1);
+  if (/e/.test(s)) return (neg ? '-' : '') + s;
+  var p = s.split('.'), i = p[0].length > 4 ? p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : p[0];
+  return (neg ? '-' : '') + i + (p[1] ? ',' + p[1] : '');
+}
+// Body na zobrazenie: 7,3 alebo 8.
+function ptsFmt(p) { return String(Math.round((p || 0) * 10) / 10).replace('.', ','); }
+// Body za jednu odpoveď: správna 1, nesprávna, na kontrolu alebo bez odpovede 0, číselná podľa odchýlky.
+function ansPts(q, a) {
+  if (!q) return 0;
+  if (q.num) return typeof a === 'string' ? numPts(q, a) : 0;
+  return gradeAns(q, a) === 'ok' ? 1 : 0;
+}
+// Hodnotenie odpovede: 'none' bez odpovede, 'ok' správne, 'part' číselná s časťou bodu, 'review' na kontrolu (líši sa o preklep), 'bad' nesprávne.
 function gradeAns(q, a) {
   if (!q) return 'none';
+  if (q.num) {
+    if (typeof a !== 'string' || !a.trim()) return 'none';
+    var p = numPts(q, a);
+    return p >= 1 ? 'ok' : p > 0 ? 'part' : 'bad';
+  }
   if (q.text) return typeof a === 'string' ? gradeText(q, a) : 'none';
   if (typeof a !== 'number') return 'none';
   return a === q.ok ? 'ok' : 'bad';
+}
+
+// Správna číselná odpoveď slovami: „750 000 000 ± 20 % (plné body do ± 5 %)“.
+function numText(q) {
+  var d = function (abs, p) { return p !== null && p !== undefined ? numFmt(p) + ' %' : numFmt(abs); };
+  return numFmt(q.val) + (q.tol > 0 ? ' ± ' + d(q.tol, q.tolP) : '') + (q.full > 0 ? ' (' + t('common.num_full', { v: d(q.full, q.fullP) }) + ')' : '');
 }
 
 /* ---------- obrázok otázky na celú obrazovku ---------- */

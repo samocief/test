@@ -315,3 +315,17 @@ body.zooming{overflow:hidden}
   .drow.trow .bar{display:none}
   .drow.trow .act{grid-column:2 / -1;justify-content:flex-start}
 }
+
+/* číselné otázky (1.6) */
+.nprev{margin-top:6px;font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent)}
+.nprev.bad{color:var(--warn);font-size:.95rem}
+.rq.part{border-left-color:#c58a00}
+.rq li.part{background:#fbefd0;color:#8a5a00;font-weight:700}
+@media (prefers-color-scheme: dark){ .rq li.part{background:#3a2e10;color:#f0c35a} }
+.drow.nrow{grid-template-columns:minmax(0,1fr) minmax(50px,22%) 2.4em 3.6em}
+.drow.nrow .p{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.drow.nrow.ok{color:var(--ok)}
+.drow.nrow.ok .bar > i{background:var(--ok)}
+.drow.nrow.part{color:#8a5a00}
+@media (prefers-color-scheme: dark){ .drow.nrow.part{color:#f0c35a} }
+.drow.nrow.part .bar > i{background:#c58a00}
