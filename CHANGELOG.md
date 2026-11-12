@@ -1,5 +1,9 @@
 # Zmeny
 
+## 1.8.1 (2026-11-12) – treba vymeniť skript tabuľky
+
+- Čas odovzdania v PDF písomkách (Uložiť písomky na Disk), v prehľade učiteľa a vo výsledku žiaka je presne ten z tabuľky. Doteraz sa mohol posunúť na pacifický čas.
+
 ## 1.8 (2026-11-10) – treba vymeniť skript tabuľky
 
 - Body za číselnú otázku sa zaokrúhľujú na 0,01 (celé percentá), nie na 0,1. Odpoveď tesne za pásmom plných bodov
