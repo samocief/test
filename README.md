@@ -5,7 +5,8 @@ aplikácia beží na GitHub Pages: <https://samocief.github.io/test/>.
 
 Funguje rovnako ako písomka v [Slepej mape](https://github.com/samocief/blindmap): žiaci naskenujú QR kód, vyberú svoje meno,
 majú jeden spoločný čas, voľne sa presúvajú medzi otázkami, môžu si ich označiť vlajkou a vracať sa k nim.
-Prvý odchod z testu (iná karta, iná aplikácia, zamknutie telefónu) strhne 10 % z výsledku, druhý test ukončí a odovzdá.
+Kto odíde z testu (iná karta, aplikácia alebo okno, zamknutie telefónu) na viac než 5 s, tomu sa test zamkne a čas zastaví;
+učiteľ ho v prehľade vráti bez trestu, so strhnutím 10 %, alebo mu test ukončí. Kratšie výpadky sa len zapíšu.
 
 ## Tabuľka učiteľa
 

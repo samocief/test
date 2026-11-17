@@ -1,5 +1,20 @@
 # Zmeny
 
+## 1.10 (2026-11-17) – treba vymeniť skript tabuľky
+
+- **Odchod z testu sa už netrestá automaticky.** Ak je žiak mimo testu (iná karta alebo aplikácia, iné okno, zmenšené okno, zamknutý telefón, zatvorená stránka):
+  - do 1 s sa nič nedeje,
+  - do 5 s (obnovenie stránky do 10 s) sa vráti sám a pokračuje; učiteľ vidí v prehľade „krátko mimo testu n×“,
+  - dlhšie: **test sa zamkne a čas sa mu zastaví** od chvíle, keď odišiel. Odpovede ostanú uložené, žiak čaká na učiteľa.
+- V prehľade učiteľa (aj dozoru) je zamknutý žiak zvýraznený s časom a dôvodom, nad tabuľkou je upozornenie „Na vrátenie do testu čaká…“,
+  v názve karty počet a pri novom zamknutí krátke pípnutie. Prehľad sa vtedy obnovuje každé 3 s. Tlačidlá:
+  **Vrátiť** (bez trestu), **Vrátiť −10 %** (strhnutie najviac raz), **Ukončiť** (test sa hneď odovzdá s uloženými odpoveďami).
+  Žiak pokračuje s rovnakým zvyšným časom, aký mal pri odchode.
+- Učiteľ vidí aj žiaka, ktorý je práve mimo testu (napr. zamknutý telefón vo vrecku), a môže ho vrátiť alebo mu test ukončiť skôr, než sa vráti.
+- Zamknutie ostane aj po obnovení stránky. Druhý odchod test už neukončuje.
+- Stĺpec **odchody** v hárku výsledkov = počet odchodov, za ktoré učiteľ strhol body (0 alebo 1). V stĺpci príznak sú zamknutia a vrátenia s časom.
+- Aplikácia potrebuje skript 1.10, so starším skriptom žiak test nezačne a učiteľ vidí upozornenie.
+
 ## 1.9 (2026-11-17) – treba vymeniť skript tabuľky
 
 - **Viac času na písomku pre vybraných žiakov:** hárok **Čas** (vytvorí sa sám pri otvorení aplikácie učiteľa) so stĺpcami Meno | Čas. Do stĺpca Meno stačí skopírovať mená žiakov;

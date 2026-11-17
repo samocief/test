@@ -11,7 +11,7 @@
  * Hárky: Otázky (banka testov, píše učiteľ), Žiaci (píše učiteľ), Testy a Res_… (výsledky, píše skript), _balíky (skrytý).
  * Písomka: jeden celkový čas, žiak sa medzi otázkami voľne presúva a odpovede mení až do odovzdania.
  * Skupiny: otázky so Skupinou A píše skupina A, so Skupinou B skupina B, otázky bez skupiny píšu obe.
- * Prvý odchod z testu strhne z celkového výsledku LEAVE_PENALTY, druhý test ukončí a odovzdá.
+ * Odchod z testu žiaka zamkne a zastaví mu čas; vráti ho učiteľ (bez trestu, so strhnutím LEAVE_PENALTY, alebo test ukončí).
  *
  * Od 1.3: id testu „trieda_MM-dd_HH:mm“ (napr. 9A_10-25_19:49), hárok výsledkov „Res_<id>“ hneď za hárkom Testy, najnovší vľavo.
  * Písomky žiakov sa dajú uložiť ako PDF na Disk (priečinok „Písomky – žiaci“ vedľa tabuľky).
@@ -27,8 +27,12 @@
  * Test so šachovnicou (stĺpec „šachovnica“ v hárku Testy) má v každom druhom rade skupiny prehodené.
  *
  * Od 1.9: hárok „Čas“ (Meno | Čas) = žiaci, ktorí majú na test viac času (predvolene +50 %, v stĺpci Čas aj iné, napr. „25 %“ alebo „5 min“).
+ *
+ * Od 1.10: odchod z testu sa netrestá automaticky. Žiak, ktorý je mimo testu dlhšie ako pár sekúnd, sa zamkne a čas sa mu zastaví.
+ * Učiteľ (alebo dozor) ho v prehľade vráti: bez trestu, so strhnutím LEAVE_PENALTY, alebo mu test ukončí a odovzdá.
+ * Stĺpec „odchody“ v hárku výsledkov = počet odchodov, za ktoré učiteľ strhol body.
  */
-const VERSION = '1.9';
+const VERSION = '1.10';
 const APP_URL = 'https://samocief.github.io/test/';
 const APP_NAME = 'Písomky';
 
@@ -42,7 +46,7 @@ const TEST_HEAD = ['id testu', 'vytvorený', 'trieda', 'test z banky', 'názov',
   'miešať možnosti', 'žiak po uzavretí uvidí', 'otázky A', 'otázky B', 'uzavretý o', 'šachovnica'];
 const RES_FIXED = ['odoslané', 'žiak', 'skupina', 'výsledok (%)', 'body'];
 const RES_TAIL = ['odchody', 'odpovede', 'príznak'];
-const LEAVE_PENALTY = 0.10;    // strhnutie z celkového výsledku za prvý odchod z testu (10 percentuálnych bodov)
+const LEAVE_PENALTY = 0.10;    // strhnutie z celkového výsledku, keď učiteľ vráti žiaka so strhnutím (10 percentuálnych bodov, najviac raz)
 const REVIEW_MIN = 15;         // koľko minút po uzavretí testu žiak vidí svoje výsledky; potom sa už nezobrazia (ani po znovuotvorení odkazu)
 const GRACE_MS = 120000;       // po uplynutí času sa odovzdanie ešte prijme bez príznaku (pomalá sieť)
 const STATE = { ready: 'pripravený', open: 'otvorený', closed: 'uzavretý' };
@@ -50,7 +54,7 @@ const REVEAL = { all: 'odpovede', pct: 'len výsledok' };
 const TEACHER = 'Učiteľ';                        // jedno meno navyše v každej triede, nepočíta sa do priemeru
 const ABSENT = 'neprítomný';
 const TEXT_MAX = 100;                            // najdlhšia odpoveď na dopísanie (znaky)
-const DOZOR_OK = { tTest: 1, tSetTest: 1, tUnlock: 1, tAbsent: 1 };   // čo smie odkaz pre dozor (len jeden test)
+const DOZOR_OK = { tTest: 1, tSetTest: 1, tUnlock: 1, tAbsent: 1, tReturn: 1 };   // čo smie odkaz pre dozor (len jeden test)
 const WHY = { none: 'bez odpovede', ended: 'ukončené' };
 const CHUNK = 40000;
 
@@ -293,7 +297,7 @@ function teacherKey_() {
   return k;
 }
 function auth_(req) { if (!req.k || req.k !== teacherKey_()) fail_('auth'); }
-// Kľúč dozoru platí len pre jeden test a len na prehľad, spustenie, uzavretie, odomknutie a neprítomných.
+// Kľúč dozoru platí len pre jeden test a len na prehľad, spustenie, uzavretie, odomknutie, vrátenie do testu a neprítomných.
 function dozorKey_(testId) {
   const sig = Utilities.computeHmacSha256Signature('dozor|' + testId, teacherKey_());
   return Utilities.base64EncodeWebSafe(sig).replace(/=+$/, '').slice(0, 16);
@@ -319,8 +323,8 @@ function doGet(e) {
 function out_(obj) { return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON); }
 const ROUTES = {
   ping: function () { return { ok: true, v: VERSION }; },
-  pupilInit: pupilInit_, pupilLogin: pupilLogin_, pupilBegin: pupilBegin_, pupilSave: pupilSave_, pupilEvent: pupilEvent_, pupilSubmit: pupilSubmit_, pupilState: pupilState_, pupilResult: pupilResult_,
-  tInit: tInit_, tCreateTest: tCreateTest_, tTest: tTest_, tSetTest: tSetTest_, tUnlock: tUnlock_, tAbsent: tAbsent_, tFixKey: tFixKey_, tTextAns: tTextAns_, tExportPupil: tExportPupil_
+  pupilInit: pupilInit_, pupilLogin: pupilLogin_, pupilBegin: pupilBegin_, pupilSave: pupilSave_, pupilEvent: pupilEvent_, pupilAway: pupilAway_, pupilSubmit: pupilSubmit_, pupilState: pupilState_, pupilResult: pupilResult_,
+  tInit: tInit_, tCreateTest: tCreateTest_, tTest: tTest_, tSetTest: tSetTest_, tUnlock: tUnlock_, tReturn: tReturn_, tAbsent: tAbsent_, tFixKey: tFixKey_, tTextAns: tTextAns_, tExportPupil: tExportPupil_
 };
 function handle_(req) {
   try {
@@ -680,10 +684,26 @@ function publicQs_(pack, keys) {
 /* ---------- prihlásenia (zámok mena na jedno zariadenie) ---------- */
 function logins_(id) { try { return JSON.parse(props_().getProperty('L1_' + id)) || { p: {}, f: [] }; } catch (e) { return { p: {}, f: [] }; } }
 function saveLogins_(id, L) { if (L.f.length > 30) L.f = L.f.slice(-30); props_().setProperty('L1_' + id, JSON.stringify(L)); }
-// Začiatok písania a počet odchodov každého žiaka: {žiak: [čas začiatku v ms, odchody]}. Samostatne od prihlásení,
-// aby po odomknutí (iné zariadenie) žiak pokračoval so zvyšným časom a odchody sa nestratili. Nový pokus ich maže.
-function starts_(id) { try { return JSON.parse(props_().getProperty('S1_' + id)) || {}; } catch (e) { return {}; } }
+// Priebeh písania každého žiaka: {žiak: st}. Samostatne od prihlásení, aby po odomknutí (iné zariadenie) žiak pokračoval
+// so zvyšným časom a stav sa nestratil. Nový pokus ho maže.
+// st: s = začiatok (ms), tot = celkový čas žiaka (min), pen = strhnutia (0/1), pz = zastavený čas (ms),
+//     lk = zamknutý od (ms, 0 = píše), lw = dôvod, le = výpadok, ktorý ho zamkol, aw/ae/aww = práve mimo testu (od, výpadok, dôvod),
+//     re = posledný výpadok vrátený učiteľom, rt = kedy, sh = krátke výpadky (vrátil sa sám), nl = zamknutia, end = test ukončil učiteľ.
+// Do verzie 1.9 to bolo pole [začiatok, odchody, celkový čas].
+function starts_(id) {
+  let S; try { S = JSON.parse(props_().getProperty('S1_' + id)) || {}; } catch (e) { S = {}; }
+  Object.keys(S).forEach(function (k) { const v = S[k]; if (Array.isArray(v)) S[k] = { s: v[0], pen: v[1] || 0, tot: v[2] || 0 }; });
+  return S;
+}
 function saveStarts_(id, S) { props_().setProperty('S1_' + id, JSON.stringify(S)); }
+// Zostávajúci čas žiaka v ms: kým je zamknutý alebo ho učiteľ vrátil, čas stojí.
+function leftOf_(st, test) {
+  const now = Date.now();
+  return st.s + (st.tot || test.total) * 60000 + (st.pz || 0) + (st.lk ? now - st.lk : 0) - now;
+}
+function hms_(ms) { return Utilities.formatDate(new Date(ms), tz_(), 'HH:mm:ss'); }
+// Najvyššie číslo výpadku, ktoré server pozná (žiak po výmene zariadenia číslovanie nezačne odznova).
+function epOf_(st) { return Math.max(st.ae || 0, st.le || 0, st.re || 0); }
 // Vlastnosti skriptu majú obmedzené miesto: prihlásenia testov starších než 60 dní (podľa stĺpca vytvorený v hárku Testy) sa mažú.
 // Výsledky v tabuľke ostávajú.
 function pruneLogins_(t) {
@@ -826,7 +846,7 @@ function readResults_(test) {
     let ans = {}; try { ans = JSON.parse(String(row[cO]) || '{}') || {}; } catch (e) { ans = {}; }
     const rv = row[cR];
     out.push({ row: ri + 2, pupilId: pupilKey_(test.cls, row[cN]), name: s_(row[cN]), sent: sentText_(sentD[ri], row[cS]), group: g, keys: groupKeys_(test, g), leaves: cL >= 0 ? num_(row[cL]) || 0 : 0,
-      ans: ans, pct: typeof rv === 'number' ? rv : null, points: cB >= 0 ? s_(row[cB]) : '', ended: cF >= 0 && /ukončený po druhom odchode/.test(s_(row[cF])), flag: cF >= 0 ? s_(row[cF]) : '',
+      ans: ans, pct: typeof rv === 'number' ? rv : null, points: cB >= 0 ? s_(row[cB]) : '', ended: cF >= 0 && /ukončený po druhom odchode|test ukončil učiteľ|test ukončený/.test(s_(row[cF])), flag: cF >= 0 ? s_(row[cF]) : '',
       absent: typeof rv !== 'number' && normName(rv) === normName(ABSENT), teacher: normName(row[cN]) === normName(TEACHER) });
   });
   return out;
@@ -916,9 +936,9 @@ function pupilLogin_(req) {
   const group = groupFor_(test, me), keys = groupKeys_(test, group), pack = loadPack_(testId);
   // Ak už žiak začal (napr. na inom zariadení pred odomknutím), pokračuje so zvyšným časom a s uloženými odpoveďami.
   const st = starts_(testId)[me.id], prog = progGet_(testId, me.id);
-  const total = st && st[2] ? st[2] : pupilTotal_(test, me.label);
+  const total = st && st.tot ? st.tot : pupilTotal_(test, me.label);
   const out = { ok: true, pid: me.id, name: me.label, group: group, total: total, penalty: LEAVE_PENALTY, shuffle: test.shuffle, keys: keys, qs: publicQs_(pack, keys), begun: !!st };
-  if (st) { out.left = st[0] + total * 60000 - Date.now(); out.leaves = st[1] || 0; }
+  if (st) { out.left = leftOf_(st, test); out.leaves = st.pen || 0; out.lock = st.lk ? 1 : 0; out.end = st.end ? 1 : 0; out.ep = epOf_(st); }
   if (prog) { out.ans = cleanAns_(prog.ans, keys, pack); out.marks = (prog.mk || []).filter(function (k) { return keys.indexOf(k) >= 0; }); }
   return out;
 }
@@ -932,10 +952,10 @@ function pupilBegin_(req) {
     if (!e || e.d !== device) fail_('not_logged');
     if (e.done) fail_('done');
     const S = starts_(testId);
-    // [začiatok, odchody, celkový čas žiaka v min]: čas sa zafixuje pri štarte, neskoršia zmena hárka Čas ho už nemení
-    if (!S[pupilId]) { S[pupilId] = [Date.now(), 0, pupilTotal_(test, e.n)]; saveStarts_(testId, S); }
-    const total = S[pupilId][2] || test.total;
-    return { ok: true, left: S[pupilId][0] + total * 60000 - Date.now(), total: total, leaves: S[pupilId][1] || 0 };
+    // celkový čas žiaka sa zafixuje pri štarte, neskoršia zmena hárka Čas ho už nemení
+    if (!S[pupilId]) { S[pupilId] = { s: Date.now(), pen: 0, tot: pupilTotal_(test, e.n) }; saveStarts_(testId, S); }
+    const st = S[pupilId], total = st.tot || test.total;
+    return { ok: true, left: leftOf_(st, test), total: total, leaves: st.pen || 0, lock: st.lk ? 1 : 0, ep: epOf_(st) };
   });
 }
 // Priebežné uloženie odpovedí počas písania (len vyrovnávacia pamäť, do tabuľky sa píše až pri odovzdaní).
@@ -949,7 +969,7 @@ function pupilSave_(req) {
   progPut_(testId, pupilId, { ans: ans, mk: mk, n: Object.keys(ans).length, at: now_('HH:mm:ss') });
   return { ok: true };
 }
-// Žiak opustil test (iná karta alebo aplikácia). Zapíše sa hneď, aby to učiteľ videl v prehľade; leave = poradie odchodu.
+// Starší tvar (aplikácia do verzie 1.9 v pamäti prehliadača): odchod so strhnutím. leave = poradie odchodu.
 function pupilEvent_(req) {
   const testId = String(req.t || ''), pupilId = String(req.p || ''), device = String(req.d || '').slice(0, 32);
   withLock_(function () {
@@ -960,9 +980,78 @@ function pupilEvent_(req) {
     const n = Math.min(9, Math.max(0, parseInt(req.leave, 10) || 0));
     if (n) {
       const S = starts_(testId);
-      if (S[pupilId] && (S[pupilId][1] || 0) < n) { S[pupilId][1] = n; saveStarts_(testId, S); }
+      if (S[pupilId] && (S[pupilId].pen || 0) < n) { S[pupilId].pen = n; saveStarts_(testId, S); }
     }
   });
+  return { ok: true };
+}
+// Žiak je mimo testu. ph: start = práve odišiel (učiteľ ho v prehľade vidí ako „mimo testu“), back = vrátil sa sám do pár sekúnd,
+// lock = bol preč dlhšie: zamkne sa a čas sa mu zastaví od chvíle odchodu (ms = ako dlho bol preč). ep = poradové číslo výpadku.
+// Odpoveď: lock = či je zamknutý, end = test mu učiteľ ukončil, left = zostávajúci čas, leaves = strhnutia.
+const AWAY_WHY = { tab: 'iná karta alebo aplikácia', win: 'iné okno', small: 'zmenšené okno', reload: 'zatvorená alebo obnovená stránka' };
+function pupilAway_(req) {
+  const testId = String(req.t || ''), pupilId = String(req.p || ''), device = String(req.d || '').slice(0, 32);
+  const test = testCached_(testId);
+  if (!test) fail_('no_test');
+  const ph = String(req.ph || ''), ep = Math.max(0, parseInt(req.ep, 10) || 0), ms = Math.min(6 * 3600000, Math.max(0, parseInt(req.ms, 10) || 0));
+  const why = AWAY_WHY[req.why] || AWAY_WHY.tab;
+  if (ph === 'lock' && req.ans) { const ans = cleanAns_(req.ans, Object.keys(req.ans || {}).slice(0, 200), null), mk = [].concat(req.mk || []).map(String).filter(function (k) { return k.length < 40; }).slice(0, 200); progPut_(testId, pupilId, { ans: ans, mk: mk, n: Object.keys(ans).length, at: now_('HH:mm:ss') }); }
+  return withLock_(function () {
+    const L = logins_(testId), e = L.p[pupilId];
+    if (!e || e.d !== device) fail_('not_logged');
+    const S = starts_(testId), st = S[pupilId];
+    if (!st || e.done) return { ok: true, lock: 0, done: e.done ? 1 : 0 };
+    const now = Date.now(), res = function () { return { ok: true, lock: st.lk ? 1 : 0, end: st.end ? 1 : 0, left: leftOf_(st, test), leaves: st.pen || 0 }; };
+    if (st.end) return res();
+    if (ph === 'start') {
+      if (!st.lk && ep > (st.re || 0) && ep >= (st.ae || 0)) { st.aw = now; st.ae = ep; st.aww = why; saveStarts_(testId, S); }
+      return res();
+    }
+    if (ph === 'back') {
+      if (st.ae === ep && st.aw) st.aw = 0;
+      if (ms >= 1000 && ep > (st.re || 0)) st.sh = (st.sh || 0) + 1;
+      saveStarts_(testId, S);
+      return res();
+    }
+    if (ph === 'lock') {
+      // učiteľ ho medzitým už vrátil (videl ho mimo testu) alebo je už zamknutý (obnovená stránka)
+      if (ep && ep <= (st.re || 0)) { if (st.ae === ep) { st.aw = 0; saveStarts_(testId, S); } return res(); }
+      if (st.lk) return res();
+      st.lk = Math.max(now - ms, st.rt || 0, st.s);   // čas stojí od odchodu, nie skôr než od posledného vrátenia
+      st.lw = why; st.le = Math.max(ep, st.le || 0); st.nl = (st.nl || 0) + 1; st.aw = 0;
+      saveStarts_(testId, S);
+      L.f.push({ p: pupilId, t: hms_(st.lk), k: 'vypadol z testu – ' + why });
+      saveLogins_(testId, L);
+      return res();
+    }
+    fail_('bad_request');
+  });
+}
+// Učiteľ alebo dozor vráti zamknutého (alebo práve neprítomného) žiaka do testu: m = ok (bez trestu), pen (so strhnutím), end (ukončí a odovzdá).
+function tReturn_(req) {
+  const testId = String(req.t || ''), pid = String(req.p || ''), m = String(req.m || 'ok');
+  const test = testCached_(testId);
+  if (!test) fail_('no_test');
+  let device = '';
+  withLock_(function () {
+    const L = logins_(testId), e = L.p[pid], S = starts_(testId), st = S[pid];
+    if (!e || e.done || !st) return;
+    const now = Date.now(), from = st.lk || st.aw || 0;
+    if (m === 'end') {
+      if (st.lk) { st.pz = (st.pz || 0) + now - st.lk; st.lk = 0; }
+      st.end = 1; st.aw = 0; device = e.d;
+      L.f.push({ p: pid, t: hms_(now), k: 'test ukončil učiteľ' });
+    } else {
+      if (!from) return;
+      st.pz = (st.pz || 0) + Math.max(0, now - from); st.lk = 0;
+      st.re = Math.max(st.re || 0, st.le || 0, st.aw ? st.ae || 0 : 0); st.aw = 0; st.rt = now;
+      if (m === 'pen') st.pen = Math.max(1, st.pen || 0);
+      L.f.push({ p: pid, t: hms_(now), k: m === 'pen' ? 'vrátený so strhnutím −' + Math.round(LEAVE_PENALTY * 100) + ' %' : 'vrátený učiteľom' });
+    }
+    saveStarts_(testId, S); saveLogins_(testId, L);
+  });
+  // Ukončený test sa hneď odovzdá s odpoveďami, ktoré má server (žiak bol zamknutý, takže sú aktuálne).
+  if (device) { const prog = progGet_(testId, pid); submitCore_(test, pid, device, prog ? prog.ans : {}, 0, true); }
   return { ok: true };
 }
 function pupilSubmit_(req) {
@@ -972,10 +1061,15 @@ function pupilSubmit_(req) {
   const L0 = logins_(testId), e0 = L0.p[pupilId];
   if (!e0 || e0.d !== device) fail_('not_logged');
   if (e0.done) return { ok: true, already: true };
+  const st0 = starts_(testId)[pupilId];
+  return submitCore_(test, pupilId, device, req.ans, parseInt(req.leaves, 10) || 0, !!req.ended || !!(st0 && st0.end));
+}
+function submitCore_(test, pupilId, device, rawAns, reqLeaves, ended) {
+  const testId = test.id;
   const me = player_(test, pupilId), group = groupFor_(test, me);
-  const keys = groupKeys_(test, group), pack = loadPack_(testId), ans = cleanAns_(req.ans, keys, pack);
-  const st = starts_(testId)[pupilId] || null, ended = !!req.ended;
-  const leaves = Math.max(Math.min(9, parseInt(req.leaves, 10) || 0), st ? st[1] || 0 : 0, ended ? 2 : 0);
+  const keys = groupKeys_(test, group), pack = loadPack_(testId), ans = cleanAns_(rawAns, keys, pack);
+  const st = starts_(testId)[pupilId] || null;
+  const leaves = Math.max(Math.min(9, reqLeaves || 0), st ? st.pen || 0 : 0);
   const sc = scoreOf_(pack, keys, ans, leaves), miss = [];
   const cells = test.keys.map(function (k) {
     if (keys.indexOf(k) < 0) return '';
@@ -988,10 +1082,11 @@ function pupilSubmit_(req) {
     if (e && e.done) return;
     const sh = resultsSheet_(test, pack);
     const flags = L.f.filter(function (x) { return x.p === pupilId && x.k.indexOf('odchod') !== 0; }).map(function (x) { return x.k + ' ' + x.t; });
-    if (leaves > 0) flags.push('odchod z testu: ' + leaves + '× (−' + Math.round(LEAVE_PENALTY * 100) + ' %)');
-    if (ended) flags.push('test ukončený po druhom odchode');
-    const myTotal = st ? st[2] || test.total : test.total;
-    if (st && Date.now() > st[0] + myTotal * 60000 + GRACE_MS) flags.push('odovzdané po čase (+' + Math.round((Date.now() - st[0]) / 60000 - myTotal) + ' min)');
+    if (st && st.sh) flags.push('krátko mimo testu (vrátil sa sám): ' + st.sh + '×');
+    if (leaves > 0) flags.push('strhnuté za odchod −' + Math.round(LEAVE_PENALTY * 100) + ' %');
+    if (ended && !(st && st.end)) flags.push('test ukončený');
+    const over = st ? -leftOf_(st, test) : 0;
+    if (st && over > GRACE_MS) flags.push('odovzdané po čase (+' + Math.round(over / 60000) + ' min)');
     if (miss.length) flags.push((ended ? 'nedokončené: ' : 'bez odpovede: ') + miss.length + '×');
     appendResult_(sh, { odoslane: now_(), ziak: me.label, skupina: group, vysledok: sc.pct, body: ptsFmt(sc.ok) + '/' + sc.n, odchody: leaves, odpovede: JSON.stringify(ans), priznak: flags.join('; ') }, cells, notes);
     L.p[pupilId] = { d: device, t: e ? e.t : now_('HH:mm:ss'), n: me.label, done: 1 };
@@ -1000,10 +1095,17 @@ function pupilSubmit_(req) {
   progDel_(testId, pupilId);
   return { ok: true };
 }
+// Stav testu; so žiakom (p, d) aj jeho stav: zamknutý, ukončený, odovzdaný, zostávajúci čas.
 function pupilState_(req) {
   const test = testCached_(String(req.t || ''));
   if (!test) fail_('no_test');
-  return { state: test.state };
+  const out = { state: test.state };
+  if (req.p) {
+    const pid = String(req.p), e = logins_(test.id).p[pid], st = starts_(test.id)[pid];
+    if (e && e.d === String(req.d || '').slice(0, 32)) out.me = { done: e.done ? 1 : 0, lock: st && st.lk ? 1 : 0, end: st && st.end ? 1 : 0, left: st ? leftOf_(st, test) : null, leaves: st ? st.pen || 0 : 0 };
+    else out.me = { gone: 1 };
+  }
+  return out;
 }
 // Po uzavretí testu: výsledok žiaka, pri nastavení „odpovede“ aj jeho odpovede so správnymi.
 function pupilResult_(req) {
@@ -1240,7 +1342,12 @@ function tTest_(req) {
     writing.forEach(function (id) {
       let p = null; try { p = JSON.parse(got[progKey_(test.id, id)] || 'null'); } catch (e) { p = null; }
       const st = S[id];
-      if (p || st) prog[id] = { n: p ? p.n || 0 : 0, mk: p && p.mk ? p.mk.length : 0, lv: st ? st[1] || 0 : 0, left: st ? st[0] + (st[2] || test.total) * 60000 - Date.now() : null };
+      if (!p && !st) return;
+      const g = prog[id] = { n: p ? p.n || 0 : 0, mk: p && p.mk ? p.mk.length : 0, lv: st ? st.pen || 0 : 0, left: st ? leftOf_(st, test) : null };
+      // zamknutý (čaká na učiteľa) alebo práve mimo testu dlhšie ako pár sekúnd
+      if (st && st.lk) { g.lock = hms_(st.lk); g.why = st.lw || ''; }
+      else if (st && st.aw && Date.now() - st.aw > 6000) { g.away = hms_(st.aw); g.why = st.aww || ''; }
+      if (st && st.sh) g.sh = st.sh;
     });
   }
   const out = { test: test, pupils: pupils, logins: L, prog: prog, penalty: LEAVE_PENALTY, results: readResults_(test) };
