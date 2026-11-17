@@ -136,7 +136,7 @@ function pupilIntro() {
     var r;
     try { r = await apiRetry('pupilBegin', { t: P.t, p: S.pupilId, d: P.device }, 3); }
     catch (e) { go.disabled = false; go.textContent = t('p.start'); $('p-intro-err').textContent = errText(e); $('p-intro-err').hidden = false; return; }
-    S.begun = true; S.leaves = Math.max(S.leaves || 0, r.leaves || 0); P.deadline = Date.now() + r.left; S.idx = 0; pSave();
+    S.begun = true; S.leaves = Math.max(S.leaves || 0, r.leaves || 0); if (r.total) S.total = r.total; P.deadline = Date.now() + r.left; S.idx = 0; pSave();
     pupilGame(false);
   };
   pShow('p-intro');

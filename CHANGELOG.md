@@ -1,5 +1,13 @@
 # Zmeny
 
+## 1.9 (2026-11-17) – treba vymeniť skript tabuľky
+
+- **Viac času na písomku pre vybraných žiakov:** hárok **Čas** (vytvorí sa sám pri otvorení aplikácie učiteľa) so stĺpcami Meno | Čas. Do stĺpca Meno stačí skopírovať mená žiakov;
+  dostanú o 50 % viac času (zaokrúhlené nahor na celé minúty, napr. 20 → 30 min). Iná hodnota pri žiakovi v stĺpci Čas, napr. `25 %` alebo `5 min`.
+  Meno ako v hárku Žiaci, poradie mena a priezviska ani diakritika nevadí.
+- Žiak vidí svoj čas len na svojej obrazovke (úvod, časomiera). V prehľade učiteľa ani vo výsledkoch to nevidno, hárok má zámerne nenápadný názov.
+- Čas sa zafixuje, keď žiak ťukne na Začať; neskoršia zmena hárka ho už nezmení. Upozornenie „odovzdané po čase“ sa ráta z jeho času.
+
 ## 1.8.1 (2026-11-12) – treba vymeniť skript tabuľky
 
 - Čas odovzdania v PDF písomkách (Uložiť písomky na Disk), v prehľade učiteľa a vo výsledku žiaka je presne ten z tabuľky. Doteraz sa mohol posunúť na pacifický čas.

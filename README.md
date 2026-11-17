@@ -13,12 +13,14 @@ Prvý odchod z testu (iná karta, iná aplikácia, zamknutie telefónu) strhne 1
 |---|---|---|
 | **Otázky** | učiteľ | Test, Skupina (A/B/prázdne = obe), Otázka, A–F (aspoň dve, pri dopisovaní prázdne), Správna (písmeno, odpovede oddelené `;` alebo číslo s odchýlkou `~`), Obrázok (odkaz), Aktívna |
 | **Žiaci** | učiteľ | zasadací poriadok skopírovaný z Excelu: Trieda, Rad, A, B, A, B … (alebo zoznam: Trieda, Meno, Skupina, Aktívny) |
+| **Čas** | učiteľ | Meno, Čas: žiaci, ktorí majú na písomku viac času (prázdny Čas = +50 %, inak napr. `25 %` alebo `5 min`) |
 | Testy, Res_…, _balíky | skript | spustené písomky, výsledky (písmeno alebo napísaná odpoveď, ✓ / ✗ / ? na kontrolu), snímka otázok |
 
 - Všetky riadky s rovnakým názvom v stĺpci **Test** tvoria jeden test.
 - **Skupiny:** ak test má otázky pre A aj B a trieda má v hárku Žiaci žiakov v A aj B, každá skupina píše svoje otázky
   (otázky bez skupiny píšu obe). Trieda bez skupín píše podľa voľby učiteľa všetky otázky, len A alebo len B.
 - **Zasadací poriadok v hárku Žiaci** (od verzie skriptu 1.7): celú tabuľku zasadacieho poriadku stačí skopírovať zo svojho Excelu do hárka Žiaci. Hlavička: `Trieda | Rad | A | B | A | B | …`. Každá bunka pod písmenom je jedno miesto, skupina žiaka je písmeno v hlavičke jeho stĺpca, prázdna bunka je prázdne miesto. Riadok bez triedy patrí k triede nad ním, zopakovaná hlavička sa preskočí, trieda „7A“ je to isté ako „7.A“. Skupiny teda idú po stĺpcoch: vedľa seba sedia rôzne skupiny, za sebou tá istá. Prepínač **Šachovnica** pri novom teste skupiny v každom druhom rade prehodí (podľa stĺpca Rad), takže inú skupinu má aj sused vpredu a vzadu. Hlavička môže mať aj ďalšie písmená (A/B/C), testy však zatiaľ majú len dve sady (A a B), žiaci ďalších skupín píšu A. Starší tvar hárka (Trieda | Meno | Skupina | Aktívny) funguje ďalej.
+- **Viac času** (od verzie skriptu 1.9): do hárka Čas (vytvorí sa sám) skopíruj mená žiakov ako v hárku Žiaci, poradie mena a priezviska ani diakritika nevadí. Dostanú o 50 % viac (zaokrúhlené nahor na celé minúty), inú hodnotu napíš do stĺpca Čas. Čas sa žiakovi zafixuje, keď ťukne na Začať. Vidí ho len žiak sám, v prehľade učiteľa ani vo výsledkoch sa nezobrazuje.
 - Poradie otázok sa mieša vždy, poradie možností voliteľne (predvolene áno).
 - Správne odpovede neodchádzajú do prehliadača žiaka. Opravuje skript tabuľky.
 - Spustený test má vlastnú snímku otázok. Zmeny v hárku Otázky sa ho netýkajú; chybný kľúč sa opraví v aplikácii učiteľa
