@@ -8,7 +8,12 @@
 - Žiak sa o pridanom čase dozvie do pol minúty (aj skôr, keď odpovedá), časomiera sa posunie a zobrazí sa mu „Učiteľ ti pridal čas: +2 min“.
   Keď mu čas vyprší, aplikácia sa ešte opýta servera, či čas nebol pridaný, až potom test odovzdá. Pridať čas teda stačí kedykoľvek, kým žiak neodovzdá.
 - Žiak, ktorému učiteľ test ukončí počas písania, sa to dozvie do pol minúty (doteraz až pri ďalšom odchode alebo odovzdaní).
-- Tlačidlá môže použiť aj dozor. Žiakovi, ktorý už odovzdal, sa čas pridať nedá.
+- **Aj žiakovi, ktorý už odovzdal** (kým test neuzavrieš): po potvrdení sa mu test znova otvorí s jeho odpoveďami. Pokračuje so zvyšným časom
+  z chvíle odovzdania + 2 min (kto odovzdal po čase, má 2 min). Čas mu začne bežať, až keď sa do testu vráti; telefón mu test otvorí sám do pár sekúnd,
+  inak po obnovení stránky. V prehľade je „Pridaný čas po odovzdaní – čaká, kým sa vráti do testu“. Po novom odovzdaní sa jeho predošlý riadok
+  vo výsledkoch nahradí novým (príznak „pokračoval po odovzdaní“).
+- **+2 min všetkým** sa týka len tých, ktorí práve píšu; kto už odovzdal, tomu sa test sám neotvorí.
+- Tlačidlá môže použiť aj dozor.
 
 ## 1.10 (2026-11-17) – treba vymeniť skript tabuľky
 

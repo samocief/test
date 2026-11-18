@@ -372,6 +372,7 @@ function tOverview() {
   T.cur.res.forEach(function (r) { by[r.pupilId] = r; });
   tRows().forEach(function (p) {
     var key = p.id.split('#')[0], r = seen[key] ? null : by[key], L = d.logins.p[p.id], ab = !r && !L && !!T.cur.absent[key], st, cls = '', btn = null;
+    if (r && L && !L.done) r = null;   // odovzdal, ale znova píše (pridaný čas alebo nový pokus)
     seen[key] = 1;
     if (!p.teacher) total++;
     var pr = d.prog && d.prog[p.id], n = (x.groups && p.group === 'B' ? x.keysB : x.groups ? x.keysA : x.keys).length;
@@ -381,6 +382,7 @@ function tOverview() {
     else st = t('t.st_none');
     var flags = r && r.flag ? [r.flag] : d.logins.f.filter(function (f) { return f.p === p.id; }).map(function (f) { return f.k + ' ' + f.t; });
     if (!r && pr && pr.sh) flags.push(t('t.short_n', { n: pr.sh }));
+    if (!r && L && pr && pr.rw) st = t('t.st_reopen');
     // zamknutý alebo práve mimo testu: čaká na učiteľa (vrátiť, vrátiť so strhnutím, ukončiť)
     var wait = !!(L && !r && pr && (pr.lock || pr.away));
     if (wait) {
@@ -395,10 +397,12 @@ function tOverview() {
       api('tUnlock', A({ t: T.cur.id, p: p.id })).then(function () { delete d.logins.p[p.id]; tOverview(); }).catch(function (e) { tStatus('test-msg', errText(e), 'bad'); });
     } });
     // pridať čas: žiak, ktorý začal písať a ešte neodovzdal (aj zamknutý); koľko už dostal, je pri stave
-    var canAdd = !!(L && !r && pr && pr.left !== null && pr.left !== undefined && x.state === 'open');
-    if (canAdd) {
-      if (pr.ad) st += ' · ' + t('t.added', { n: pr.ad });
-      btn = [el('button', { type: 'button', class: 'mini', text: t('t.add_time', { n: d.addMin || 2 }), title: t('t.add_time_hint', { n: d.addMin || 2 }), onclick: function () { tAddTime(p.id, this); } })].concat(btn);
+    // aj tomu, kto už odovzdal: test sa mu znova otvorí s jeho odpoveďami
+    var writes = !!(L && !r && pr && pr.left !== null && pr.left !== undefined), again = !!(r && L && L.done && d.again && d.again[p.id]);
+    if (x.state === 'open' && (writes || again)) {
+      if (writes && pr.ad) st += ' · ' + t('t.added', { n: pr.ad });
+      btn = [el('button', { type: 'button', class: 'mini', text: t('t.add_time', { n: d.addMin || 2 }), title: t(again ? 't.add_again_hint' : 't.add_time_hint', { n: d.addMin || 2 }),
+        onclick: function () { if (again && !confirm(t('t.add_again_confirm', { name: p.label, n: d.addMin || 2 }))) return; tAddTime(p.id, this); } })].concat(btn);
     }
     else if (!r && !p.teacher) btn = el('button', { type: 'button', class: 'mini', text: ab ? t('t.unmark_absent') : t('t.mark_absent'), onclick: function () { tAbsent(p, !ab, this); } });
     list.push({ p: p, r: r, st: st, cls: cls, flags: flags, btn: btn, wait: wait });

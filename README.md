@@ -7,7 +7,7 @@ Funguje rovnako ako písomka v [Slepej mape](https://github.com/samocief/blindma
 majú jeden spoločný čas, voľne sa presúvajú medzi otázkami, môžu si ich označiť vlajkou a vracať sa k nim.
 Kto odíde z testu (iná karta, aplikácia alebo okno, zamknutie telefónu) na viac než 5 s, tomu sa test zamkne a čas zastaví;
 učiteľ ho v prehľade vráti bez trestu, so strhnutím 10 %, alebo mu test ukončí. Kratšie výpadky sa len zapíšu.
-Ak písomka nestačí na čas, učiteľ v prehľade pridá žiakovi (alebo všetkým naraz) 2 minúty, aj opakovane.
+Ak písomka nestačí na čas, učiteľ v prehľade pridá žiakovi (alebo všetkým naraz) 2 minúty, aj opakovane. Žiakovi, ktorý už odovzdal, sa tým test znova otvorí s jeho odpoveďami (kým nie je test uzavretý).
 
 ## Tabuľka učiteľa
 

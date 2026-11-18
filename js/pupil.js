@@ -100,7 +100,9 @@ async function pupilLogin(pupilId, saved) {
   P.qs = r.qs;
   if (typeof r.penalty === 'number') P.penalty = r.penalty;
   var pid = r.pid || pupilId, keys = r.keys;
-  var same = saved && !saved.done && saved.pupilId === pid && saved.order && saved.order.length === keys.length && saved.order.every(function (k) { return keys.indexOf(k) >= 0; });
+  // odovzdaný test, ktorý učiteľ znova otvoril (pridal čas): pokračuje s rovnakým poradím otázok a možností
+  var same = saved && (!saved.done || (r.begun && !r.end)) && saved.pupilId === pid && saved.order && saved.order.length === keys.length && saved.order.every(function (k) { return keys.indexOf(k) >= 0; });
+  if (same && saved.done) pupilReopenReset(saved);
   var S = P.S = same ? saved : { pupilId: pid, order: shuffle(keys), opt: {}, ans: {}, marks: {}, idx: 0, begun: false, leaves: 0, awayAt: 0, ep: 0, lock: 0, done: false, sent: false, ended: false, why: '' };
   // Poradie možností: pri miešaní vlastné pre každého žiaka (písmená na obrazovke sa líšia od hárka Otázky).
   keys.forEach(function (k) {
@@ -543,9 +545,29 @@ function pupilPollStart() { clearTimeout(P.poll); P.poll = setTimeout(pupilPoll,
 function pupilPoll() {
   clearTimeout(P.poll); P.poll = null;
   if (document.hidden) { pupilPollStart(); return; }
-  api('pupilState', { t: P.t }).then(function (r) {
-    if (r.state === 'closed') pupilResults(); else pupilPollStart();
+  var S = P.S, me = S && S.pupilId && S.sent ? { t: P.t, p: S.pupilId, d: P.device } : { t: P.t };
+  api('pupilState', me).then(function (r) {
+    if (r.state === 'closed') { pupilResults(); return; }
+    // učiteľ pridal čas po odovzdaní: test sa znova otvorí
+    var m = r.me;
+    if (m && !m.gone && !m.done && !m.end && typeof m.left === 'number') { pupilReopen(); return; }
+    pupilPollStart();
   }).catch(function () { pupilPollStart(); });
+}
+function pupilReopenReset(S) { S.done = false; S.sent = false; S.why = ''; S.ended = false; S.awayAt = 0; S.lock = 0; }
+// Návrat do znova otvoreného testu: odpovede ostali v prehliadači, čas sa spustí na serveri (pupilBegin).
+async function pupilReopen() {
+  var S = P.S, r;
+  if (!P.qs) { pupilLogin(S.pupilId, S); return; }   // stránka bola medzitým obnovená: otázky načíta prihlásenie
+  pLoading();
+  try { r = await apiRetry('pupilBegin', { t: P.t, p: S.pupilId, d: P.device }, 3); }
+  catch (e) { if (e.code === 'done') { pShow('p-end'); pupilPollStart(); return; } pFail(errText(e)); return; }
+  pupilReopenReset(S);
+  S.leaves = Math.max(S.leaves || 0, r.leaves || 0); S.ep = Math.max(S.ep || 0, r.ep || 0); S.ad = r.ad || 0;
+  if (r.total) S.total = r.total;
+  P.deadline = Date.now() + r.left; pSave();
+  pupilGame(false);
+  pupilToast(t('p.reopened'));
 }
 
 /* ---------- výsledky po uzavretí testu ---------- */
