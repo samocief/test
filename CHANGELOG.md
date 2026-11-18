@@ -1,5 +1,15 @@
 # Zmeny
 
+## 1.11 (2026-11-18) – treba vymeniť skript tabuľky
+
+- **Pridať čas v prehľade.** Pri každom žiakovi, ktorý píše (aj pri zamknutom), je tlačidlo **+2 min**. Dá sa ťukať opakovane, každé ťuknutie pridá 2 minúty.
+  Nad tabuľkou je **+2 min všetkým** pre všetkých, ktorí práve píšu (napr. keď je písomka na čas pridlhá).
+- Pri stave žiaka je „pridané +n min“, vo výsledkoch v stĺpci príznak „pridaný čas +n min“. Čas z hárka Čas sa v prehľade naďalej nezobrazuje.
+- Žiak sa o pridanom čase dozvie do pol minúty (aj skôr, keď odpovedá), časomiera sa posunie a zobrazí sa mu „Učiteľ ti pridal čas: +2 min“.
+  Keď mu čas vyprší, aplikácia sa ešte opýta servera, či čas nebol pridaný, až potom test odovzdá. Pridať čas teda stačí kedykoľvek, kým žiak neodovzdá.
+- Žiak, ktorému učiteľ test ukončí počas písania, sa to dozvie do pol minúty (doteraz až pri ďalšom odchode alebo odovzdaní).
+- Tlačidlá môže použiť aj dozor. Žiakovi, ktorý už odovzdal, sa čas pridať nedá.
+
 ## 1.10 (2026-11-17) – treba vymeniť skript tabuľky
 
 - **Odchod z testu sa už netrestá automaticky.** Ak je žiak mimo testu (iná karta alebo aplikácia, iné okno, zmenšené okno, zamknutý telefón, zatvorená stránka):

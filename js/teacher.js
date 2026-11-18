@@ -3,7 +3,7 @@
  * môže ju spustiť a uzavrieť, vracať zamknutých žiakov do testu, označiť neprítomných a skopírovať výsledky. Jeho odkaz sa nikam neukladá.
  */
 var T = { s: '', k: '', dz: false, dk: '', init: null, oldScript: false, listOpen: false, cur: null, poll: null, tab: 'new', sub: 'over', showRes: false, qsForce: false };
-var FORM_KEY = 'form', NEED_SCRIPT = '1.10';
+var FORM_KEY = 'form', NEED_SCRIPT = '1.11';
 
 function tStatus(id, msg, cls) { var e = $(id); e.textContent = msg || ''; e.className = 'small ' + (cls || 'muted'); e.hidden = !msg; }
 function appBase() { return location.origin + location.pathname.replace(/[^/]*$/, ''); }
@@ -394,6 +394,12 @@ function tOverview() {
       if (r && !confirm(t('t.retry_confirm', { name: p.label }))) return;
       api('tUnlock', A({ t: T.cur.id, p: p.id })).then(function () { delete d.logins.p[p.id]; tOverview(); }).catch(function (e) { tStatus('test-msg', errText(e), 'bad'); });
     } });
+    // pridať čas: žiak, ktorý začal písať a ešte neodovzdal (aj zamknutý); koľko už dostal, je pri stave
+    var canAdd = !!(L && !r && pr && pr.left !== null && pr.left !== undefined && x.state === 'open');
+    if (canAdd) {
+      if (pr.ad) st += ' · ' + t('t.added', { n: pr.ad });
+      btn = [el('button', { type: 'button', class: 'mini', text: t('t.add_time', { n: d.addMin || 2 }), title: t('t.add_time_hint', { n: d.addMin || 2 }), onclick: function () { tAddTime(p.id, this); } })].concat(btn);
+    }
     else if (!r && !p.teacher) btn = el('button', { type: 'button', class: 'mini', text: ab ? t('t.unmark_absent') : t('t.mark_absent'), onclick: function () { tAbsent(p, !ab, this); } });
     list.push({ p: p, r: r, st: st, cls: cls, flags: flags, btn: btn, wait: wait });
   });
@@ -408,6 +414,9 @@ function tOverview() {
     tb.appendChild(el('tr', { class: o.wait ? 'wait' : null }, cells));
   });
   tWaiting(waiting);
+  var addAll = $('over-add');
+  addAll.hidden = !(x.state === 'open' && list.some(function (o) { var pr = d.prog && d.prog[o.p.id]; return !o.r && d.logins.p[o.p.id] && pr && pr.left !== null && pr.left !== undefined; }));
+  addAll.textContent = t('t.add_time_all', { n: d.addMin || 2 });
   $('over-sum').textContent = t('t.over_sum', { done: done, total: total - absent, writing: writing }) + (absent ? ' ' + t('t.over_absent', { n: absent }) : '');
   var heads = [t('t.col_pupil'), t('t.col_status')].concat(T.showRes ? [t('t.col_result')] : []).concat(anyFlag ? [t('t.col_flag')] : []).concat(['']);
   var box = $('over-table'); box.innerHTML = '';
@@ -440,6 +449,14 @@ async function tReturn(p, m, btn) {
   if (btn) btn.disabled = true;
   try { await api('tReturn', A({ t: T.cur.id, p: p.id, m: m })); await tRefresh(); }
   catch (e) { tStatus('test-msg', errText(e), 'bad'); if (btn) btn.disabled = false; }
+}
+// Pridať čas jednému žiakovi (id) alebo všetkým, ktorí práve píšu ('*'). Dá sa ťukať opakovane.
+async function tAddTime(pid, btn) {
+  if (pid === '*' && !confirm(t('t.add_all_confirm', { n: T.cur.d.addMin || 2 }))) return;
+  if (btn) btn.disabled = true;
+  try { await api('tAddTime', A({ t: T.cur.id, p: pid })); await tRefresh(); }
+  catch (e) { tStatus('test-msg', errText(e), 'bad'); }
+  if (btn) btn.disabled = false;
 }
 // Odpovede na dopísanie, ktoré čakajú na kontrolu učiteľom (bez učiteľa).
 function reviewCount() {
@@ -631,6 +648,7 @@ async function tFixKey(it, i) {
   on('list-toggle', function () { tListToggle(!T.listOpen); });
   on('show-res', function () { T.showRes = this.checked; tOverview(); }, 'onchange');
   on('over-copy', tCopyResults);
+  on('over-add', function () { tAddTime('*', $('over-add')); });
   on('over-export', tExportAll);
   on('qs-force', function () { T.qsForce = true; tQs(); });
   on('over-review-b', function () { tSub('qs'); });

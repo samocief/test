@@ -31,8 +31,10 @@
  * Od 1.10: odchod z testu sa netrestá automaticky. Žiak, ktorý je mimo testu dlhšie ako pár sekúnd, sa zamkne a čas sa mu zastaví.
  * Učiteľ (alebo dozor) ho v prehľade vráti: bez trestu, so strhnutím LEAVE_PENALTY, alebo mu test ukončí a odovzdá.
  * Stĺpec „odchody“ v hárku výsledkov = počet odchodov, za ktoré učiteľ strhol body.
+ *
+ * Od 1.11: učiteľ (alebo dozor) môže v prehľade pridať žiakovi čas (ADD_MIN minút, aj opakovane), alebo naraz všetkým, ktorí práve píšu.
  */
-const VERSION = '1.10';
+const VERSION = '1.11';
 const APP_URL = 'https://samocief.github.io/test/';
 const APP_NAME = 'Písomky';
 
@@ -48,13 +50,14 @@ const RES_FIXED = ['odoslané', 'žiak', 'skupina', 'výsledok (%)', 'body'];
 const RES_TAIL = ['odchody', 'odpovede', 'príznak'];
 const LEAVE_PENALTY = 0.10;    // strhnutie z celkového výsledku, keď učiteľ vráti žiaka so strhnutím (10 percentuálnych bodov, najviac raz)
 const REVIEW_MIN = 15;         // koľko minút po uzavretí testu žiak vidí svoje výsledky; potom sa už nezobrazia (ani po znovuotvorení odkazu)
+const ADD_MIN = 2;              // koľko minút pridá jedno ťuknutie na „+2 min“ v prehľade učiteľa
 const GRACE_MS = 120000;       // po uplynutí času sa odovzdanie ešte prijme bez príznaku (pomalá sieť)
 const STATE = { ready: 'pripravený', open: 'otvorený', closed: 'uzavretý' };
 const REVEAL = { all: 'odpovede', pct: 'len výsledok' };
 const TEACHER = 'Učiteľ';                        // jedno meno navyše v každej triede, nepočíta sa do priemeru
 const ABSENT = 'neprítomný';
 const TEXT_MAX = 100;                            // najdlhšia odpoveď na dopísanie (znaky)
-const DOZOR_OK = { tTest: 1, tSetTest: 1, tUnlock: 1, tAbsent: 1, tReturn: 1 };   // čo smie odkaz pre dozor (len jeden test)
+const DOZOR_OK = { tTest: 1, tSetTest: 1, tUnlock: 1, tAbsent: 1, tReturn: 1, tAddTime: 1 };   // čo smie odkaz pre dozor (len jeden test)
 const WHY = { none: 'bez odpovede', ended: 'ukončené' };
 const CHUNK = 40000;
 
@@ -324,7 +327,7 @@ function out_(obj) { return ContentService.createTextOutput(JSON.stringify(obj))
 const ROUTES = {
   ping: function () { return { ok: true, v: VERSION }; },
   pupilInit: pupilInit_, pupilLogin: pupilLogin_, pupilBegin: pupilBegin_, pupilSave: pupilSave_, pupilEvent: pupilEvent_, pupilAway: pupilAway_, pupilSubmit: pupilSubmit_, pupilState: pupilState_, pupilResult: pupilResult_,
-  tInit: tInit_, tCreateTest: tCreateTest_, tTest: tTest_, tSetTest: tSetTest_, tUnlock: tUnlock_, tReturn: tReturn_, tAbsent: tAbsent_, tFixKey: tFixKey_, tTextAns: tTextAns_, tExportPupil: tExportPupil_
+  tInit: tInit_, tCreateTest: tCreateTest_, tTest: tTest_, tSetTest: tSetTest_, tUnlock: tUnlock_, tReturn: tReturn_, tAddTime: tAddTime_, tAbsent: tAbsent_, tFixKey: tFixKey_, tTextAns: tTextAns_, tExportPupil: tExportPupil_
 };
 function handle_(req) {
   try {
@@ -688,7 +691,8 @@ function saveLogins_(id, L) { if (L.f.length > 30) L.f = L.f.slice(-30); props_(
 // so zvyšným časom a stav sa nestratil. Nový pokus ho maže.
 // st: s = začiatok (ms), tot = celkový čas žiaka (min), pen = strhnutia (0/1), pz = zastavený čas (ms),
 //     lk = zamknutý od (ms, 0 = píše), lw = dôvod, le = výpadok, ktorý ho zamkol, aw/ae/aww = práve mimo testu (od, výpadok, dôvod),
-//     re = posledný výpadok vrátený učiteľom, rt = kedy, sh = krátke výpadky (vrátil sa sám), nl = zamknutia, end = test ukončil učiteľ.
+//     re = posledný výpadok vrátený učiteľom, rt = kedy, sh = krátke výpadky (vrátil sa sám), nl = zamknutia, end = test ukončil učiteľ,
+//     ad = čas pridaný učiteľom v prehľade (min).
 // Do verzie 1.9 to bolo pole [začiatok, odchody, celkový čas].
 function starts_(id) {
   let S; try { S = JSON.parse(props_().getProperty('S1_' + id)) || {}; } catch (e) { S = {}; }
@@ -699,7 +703,7 @@ function saveStarts_(id, S) { props_().setProperty('S1_' + id, JSON.stringify(S)
 // Zostávajúci čas žiaka v ms: kým je zamknutý alebo ho učiteľ vrátil, čas stojí.
 function leftOf_(st, test) {
   const now = Date.now();
-  return st.s + (st.tot || test.total) * 60000 + (st.pz || 0) + (st.lk ? now - st.lk : 0) - now;
+  return st.s + ((st.tot || test.total) + (st.ad || 0)) * 60000 + (st.pz || 0) + (st.lk ? now - st.lk : 0) - now;
 }
 function hms_(ms) { return Utilities.formatDate(new Date(ms), tz_(), 'HH:mm:ss'); }
 // Najvyššie číslo výpadku, ktoré server pozná (žiak po výmene zariadenia číslovanie nezačne odznova).
@@ -938,7 +942,7 @@ function pupilLogin_(req) {
   const st = starts_(testId)[me.id], prog = progGet_(testId, me.id);
   const total = st && st.tot ? st.tot : pupilTotal_(test, me.label);
   const out = { ok: true, pid: me.id, name: me.label, group: group, total: total, penalty: LEAVE_PENALTY, shuffle: test.shuffle, keys: keys, qs: publicQs_(pack, keys), begun: !!st };
-  if (st) { out.left = leftOf_(st, test); out.leaves = st.pen || 0; out.lock = st.lk ? 1 : 0; out.end = st.end ? 1 : 0; out.ep = epOf_(st); }
+  if (st) { out.left = leftOf_(st, test); out.ad = st.ad || 0; out.leaves = st.pen || 0; out.lock = st.lk ? 1 : 0; out.end = st.end ? 1 : 0; out.ep = epOf_(st); }
   if (prog) { out.ans = cleanAns_(prog.ans, keys, pack); out.marks = (prog.mk || []).filter(function (k) { return keys.indexOf(k) >= 0; }); }
   return out;
 }
@@ -955,7 +959,7 @@ function pupilBegin_(req) {
     // celkový čas žiaka sa zafixuje pri štarte, neskoršia zmena hárka Čas ho už nemení
     if (!S[pupilId]) { S[pupilId] = { s: Date.now(), pen: 0, tot: pupilTotal_(test, e.n) }; saveStarts_(testId, S); }
     const st = S[pupilId], total = st.tot || test.total;
-    return { ok: true, left: leftOf_(st, test), total: total, leaves: st.pen || 0, lock: st.lk ? 1 : 0, ep: epOf_(st) };
+    return { ok: true, left: leftOf_(st, test), ad: st.ad || 0, total: total, leaves: st.pen || 0, lock: st.lk ? 1 : 0, ep: epOf_(st) };
   });
 }
 // Priebežné uloženie odpovedí počas písania (len vyrovnávacia pamäť, do tabuľky sa píše až pri odovzdaní).
@@ -967,7 +971,9 @@ function pupilSave_(req) {
   const ans = cleanAns_(req.ans, Object.keys(req.ans || {}).slice(0, 200), null);
   const mk = [].concat(req.mk || []).map(String).filter(function (k) { return k.length < 40; }).slice(0, 200);
   progPut_(testId, pupilId, { ans: ans, mk: mk, n: Object.keys(ans).length, at: now_('HH:mm:ss') });
-  return { ok: true };
+  // zostávajúci čas: žiak sa tak dozvie o čase, ktorý mu učiteľ pridal
+  const test = testCached_(testId), st = test ? starts_(testId)[pupilId] : null;
+  return st ? { ok: true, left: leftOf_(st, test), ad: st.ad || 0, end: st.end ? 1 : 0 } : { ok: true };
 }
 // Starší tvar (aplikácia do verzie 1.9 v pamäti prehliadača): odchod so strhnutím. leave = poradie odchodu.
 function pupilEvent_(req) {
@@ -1001,7 +1007,7 @@ function pupilAway_(req) {
     if (!e || e.d !== device) fail_('not_logged');
     const S = starts_(testId), st = S[pupilId];
     if (!st || e.done) return { ok: true, lock: 0, done: e.done ? 1 : 0 };
-    const now = Date.now(), res = function () { return { ok: true, lock: st.lk ? 1 : 0, end: st.end ? 1 : 0, left: leftOf_(st, test), leaves: st.pen || 0 }; };
+    const now = Date.now(), res = function () { return { ok: true, lock: st.lk ? 1 : 0, end: st.end ? 1 : 0, left: leftOf_(st, test), ad: st.ad || 0, leaves: st.pen || 0 }; };
     if (st.end) return res();
     if (ph === 'start') {
       if (!st.lk && ep > (st.re || 0) && ep >= (st.ae || 0)) { st.aw = now; st.ae = ep; st.aww = why; saveStarts_(testId, S); }
@@ -1054,6 +1060,27 @@ function tReturn_(req) {
   if (device) { const prog = progGet_(testId, pid); submitCore_(test, pid, device, prog ? prog.ans : {}, 0, true); }
   return { ok: true };
 }
+// Učiteľ alebo dozor pridá čas: p = žiak, alebo p = '*' všetkým, ktorí práve píšu (začali, neodovzdali, test im neukončil).
+// Každé volanie pridá ADD_MIN minút, dá sa opakovať. Žiak sa to dozvie pri najbližšom spojení so serverom (najneskôr do pol minúty).
+function tAddTime_(req) {
+  const testId = String(req.t || ''), pid = String(req.p || '');
+  const test = testCached_(testId);
+  if (!test) fail_('no_test');
+  if (test.state !== 'open') fail_('closed');
+  let n = 0;
+  withLock_(function () {
+    const L = logins_(testId), S = starts_(testId);
+    Object.keys(S).forEach(function (id) {
+      if (pid !== '*' && id !== pid) return;
+      const e = L.p[id], st = S[id];
+      if (!e || e.done || st.end) return;
+      st.ad = (st.ad || 0) + ADD_MIN; n++;
+    });
+    if (n) saveStarts_(testId, S);
+  });
+  if (!n && pid !== '*') fail_('not_writing');
+  return { ok: true, n: n, min: ADD_MIN };
+}
 function pupilSubmit_(req) {
   const testId = String(req.t || ''), pupilId = String(req.p || ''), device = String(req.d || '').slice(0, 32);
   const test = testCached_(testId);
@@ -1083,6 +1110,7 @@ function submitCore_(test, pupilId, device, rawAns, reqLeaves, ended) {
     const sh = resultsSheet_(test, pack);
     const flags = L.f.filter(function (x) { return x.p === pupilId && x.k.indexOf('odchod') !== 0; }).map(function (x) { return x.k + ' ' + x.t; });
     if (st && st.sh) flags.push('krátko mimo testu (vrátil sa sám): ' + st.sh + '×');
+    if (st && st.ad) flags.push('pridaný čas +' + st.ad + ' min');
     if (leaves > 0) flags.push('strhnuté za odchod −' + Math.round(LEAVE_PENALTY * 100) + ' %');
     if (ended && !(st && st.end)) flags.push('test ukončený');
     const over = st ? -leftOf_(st, test) : 0;
@@ -1102,7 +1130,7 @@ function pupilState_(req) {
   const out = { state: test.state };
   if (req.p) {
     const pid = String(req.p), e = logins_(test.id).p[pid], st = starts_(test.id)[pid];
-    if (e && e.d === String(req.d || '').slice(0, 32)) out.me = { done: e.done ? 1 : 0, lock: st && st.lk ? 1 : 0, end: st && st.end ? 1 : 0, left: st ? leftOf_(st, test) : null, leaves: st ? st.pen || 0 : 0 };
+    if (e && e.d === String(req.d || '').slice(0, 32)) out.me = { done: e.done ? 1 : 0, lock: st && st.lk ? 1 : 0, end: st && st.end ? 1 : 0, left: st ? leftOf_(st, test) : null, ad: st ? st.ad || 0 : 0, leaves: st ? st.pen || 0 : 0 };
     else out.me = { gone: 1 };
   }
   return out;
@@ -1343,14 +1371,14 @@ function tTest_(req) {
       let p = null; try { p = JSON.parse(got[progKey_(test.id, id)] || 'null'); } catch (e) { p = null; }
       const st = S[id];
       if (!p && !st) return;
-      const g = prog[id] = { n: p ? p.n || 0 : 0, mk: p && p.mk ? p.mk.length : 0, lv: st ? st.pen || 0 : 0, left: st ? leftOf_(st, test) : null };
+      const g = prog[id] = { n: p ? p.n || 0 : 0, mk: p && p.mk ? p.mk.length : 0, lv: st ? st.pen || 0 : 0, left: st ? leftOf_(st, test) : null, ad: st ? st.ad || 0 : 0 };
       // zamknutý (čaká na učiteľa) alebo práve mimo testu dlhšie ako pár sekúnd
       if (st && st.lk) { g.lock = hms_(st.lk); g.why = st.lw || ''; }
       else if (st && st.aw && Date.now() - st.aw > 6000) { g.away = hms_(st.aw); g.why = st.aww || ''; }
       if (st && st.sh) g.sh = st.sh;
     });
   }
-  const out = { test: test, pupils: pupils, logins: L, prog: prog, penalty: LEAVE_PENALTY, results: readResults_(test) };
+  const out = { test: test, pupils: pupils, logins: L, prog: prog, penalty: LEAVE_PENALTY, addMin: ADD_MIN, results: readResults_(test) };
   if (!req.dozor) { out.dk = dozorKey_(test.id); if (req.withPack) out.pack = loadPack_(test.id); }
   return out;
 }

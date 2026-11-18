@@ -4,10 +4,11 @@
  * Čas beží na serveri od ťuknutia na Začať. Skupinu (A/B) určí tabuľka učiteľa.
  */
 var P = { t: '', info: null, qs: null, S: null, phase: 'idle', tick: null, device: '', blurTimer: null, wake: null, poll: null, wait: null,
-  deadline: 0, saveTimer: null, penalty: 0.1, hadFocus: false, hide: null, bootAt: Date.now(), lockPoll: null, lockOk: false, lockLeft: 0, startSent: false, startTimer: null };
+  deadline: 0, saveTimer: null, penalty: 0.1, hadFocus: false, hide: null, bootAt: Date.now(), lockPoll: null, lockOk: false, lockLeft: 0, startSent: false, startTimer: null,
+  syncAt: 0, syncing: false, endCheck: false, toast: null };
 // Mimo testu: do 1 s sa nič nedeje, do AWAY_AUTO_MS (po obnovení stránky do AWAY_RELOAD_MS) sa žiak vráti sám (učiteľ to vidí ako krátky výpadok),
 // dlhšie: test sa zamkne, čas sa zastaví a pokračovať môže, až keď ho vráti učiteľ.
-var AWAY_HIDDEN_MS = 1000, AWAY_AUTO_MS = 5000, AWAY_RELOAD_MS = 10000, LOCK_POLL_MS = 3000, POLL_MS = 8000, SAVE_MS = 3000, NEED_SCRIPT = '1.10';
+var AWAY_HIDDEN_MS = 1000, AWAY_AUTO_MS = 5000, AWAY_RELOAD_MS = 10000, LOCK_POLL_MS = 3000, POLL_MS = 8000, SAVE_MS = 3000, SYNC_MS = 30000, NEED_SCRIPT = '1.11';
 
 function pShow(id) { show(id, 'p'); $('p-wrap').hidden = id === 'p-game'; }
 function pFail(msg) { $('p-fail-msg').textContent = msg; pShow('p-fail'); }
@@ -112,7 +113,7 @@ async function pupilLogin(pupilId, saved) {
   (r.marks || []).forEach(function (k) { if (keys.indexOf(k) >= 0 && S.marks[k] === undefined) S.marks[k] = 1; });
   S.leaves = Math.max(S.leaves || 0, r.leaves || 0);
   S.ep = Math.max(S.ep || 0, r.ep || 0);
-  if (r.begun) { S.begun = true; P.deadline = Date.now() + r.left; } else S.begun = false;
+  if (r.begun) { S.begun = true; P.deadline = Date.now() + r.left; S.ad = r.ad || 0; } else S.begun = false;
   pSave();
   if (S.done) { pupilFinish(); return; }
   if (S.begun) {
@@ -142,7 +143,7 @@ function pupilIntro() {
     var r;
     try { r = await apiRetry('pupilBegin', { t: P.t, p: S.pupilId, d: P.device }, 3); }
     catch (e) { go.disabled = false; go.textContent = t('p.start'); $('p-intro-err').textContent = errText(e); $('p-intro-err').hidden = false; return; }
-    S.begun = true; S.leaves = Math.max(S.leaves || 0, r.leaves || 0); S.ep = Math.max(S.ep || 0, r.ep || 0); if (r.total) S.total = r.total; P.deadline = Date.now() + r.left; S.idx = 0; pSave();
+    S.begun = true; S.leaves = Math.max(S.leaves || 0, r.leaves || 0); S.ep = Math.max(S.ep || 0, r.ep || 0); if (r.total) S.total = r.total; S.ad = r.ad || 0; P.deadline = Date.now() + r.left; S.idx = 0; pSave();
     pupilGame(false);
   };
   pShow('p-intro');
@@ -152,7 +153,7 @@ function pupilIntro() {
 function curKey() { return P.S.order[P.S.idx]; }
 function pupilGame(afterReload, lockLeft) {
   pShow('p-game');
-  P.phase = 'test';
+  P.phase = 'test'; P.syncAt = Date.now(); P.endCheck = false;
   pupilQuestion();
   clearInterval(P.tick); P.tick = setInterval(pupilTimer, 250);
   if (typeof lockLeft === 'number') { pupilLocked(lockLeft, true); return; }
@@ -253,7 +254,7 @@ function pupilFlag() {
 // Dve časomiery: zostávajúci čas a zostávajúce otázky. Obe ubúdajú; keď je pás otázok kratší než pás času, žiak stíha.
 function fmtClock(sec) { sec = Math.max(0, Math.ceil(sec)); var m = Math.floor(sec / 60), s = sec % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
 function pupilMeters() {
-  var S = P.S, total = (S.total || 1) * 60, left = Math.max(0, (P.deadline - Date.now()) / 1000), n = S.order.length, done = pupilAnswered();
+  var S = P.S, total = ((S.total || 1) + (S.ad || 0)) * 60, left = Math.max(0, (P.deadline - Date.now()) / 1000), n = S.order.length, done = pupilAnswered();
   $('m-time-v').textContent = fmtClock(left);
   $('m-time').querySelector('.bar > i').style.width = Math.min(100, left / total * 100) + '%';
   $('m-tips-v').textContent = done + '/' + n;
@@ -270,14 +271,53 @@ function pupilTimer() {
   else if (P.hadFocus && !document.hidden && !S.awayAt) pupilBlur();
   pupilSize(); if (P.phase !== 'test') return;
   pupilMeters();
-  if (P.deadline - Date.now() <= 0 && !S.awayAt) { S.done = true; S.why = 'time'; pSave(); pupilFinish(); }
+  if (P.deadline - Date.now() <= 0 && !S.awayAt) { pupilTimeUp(); return; }
+  if (Date.now() - P.syncAt > SYNC_MS && !document.hidden) pupilSync();
+}
+// Čas vypršal: ešte sa opýta servera, či mu učiteľ nepridal čas (najviac 6 s), až potom test odovzdá.
+function pupilTimeUp() {
+  if (P.endCheck) return;
+  P.endCheck = true;
+  var S = P.S, over = function () { if (P.phase !== 'test' || !P.endCheck) return; P.endCheck = false; S.done = true; S.why = 'time'; pSave(); pupilFinish(); };
+  var limit = setTimeout(over, 6000);
+  api('pupilState', { t: P.t, p: S.pupilId, d: P.device }).then(function (r) {
+    clearTimeout(limit);
+    var me = r.me || {};
+    if (P.phase === 'test' && typeof me.left === 'number' && me.left > 1500 && !me.done && !me.end) { P.endCheck = false; pupilTime(me); return; }
+    if (me.done || me.end) { pupilTime(me); if (P.phase !== 'test') return; }
+    over();
+  }).catch(function () { clearTimeout(limit); over(); });
+}
+// Priebežne (každých SYNC_MS) zistí zostávajúci čas zo servera: učiteľ mohol pridať čas alebo test ukončiť.
+function pupilSync() {
+  if (P.syncing) return;
+  P.syncing = true; P.syncAt = Date.now();
+  api('pupilState', { t: P.t, p: P.S.pupilId, d: P.device }).then(function (r) { P.syncing = false; pupilTime(r.me || {}); })
+    .catch(function () { P.syncing = false; });
+}
+// Odpoveď servera so zostávajúcim časom (pupilState, pupilSave): posunie koniec, ak sa líši, a ohlási pridaný čas.
+function pupilTime(r) {
+  var S = P.S;
+  if (!S || P.phase !== 'test' || !r) return;
+  P.syncAt = Date.now();
+  if ((r.end || r.done) && !S.done) { S.ended = true; S.done = true; S.why = 'ended'; if (r.done) S.sent = true; S.awayAt = 0; pSave(); pupilFinish(); return; }
+  if (typeof r.left !== 'number') return;
+  var add = (r.ad || 0) - (S.ad || 0), end = Date.now() + r.left;
+  if (Math.abs(end - P.deadline) > 3000 || add) P.deadline = end;
+  if (add) { S.ad = r.ad || 0; pSave(); if (add > 0) pupilToast(t('p.time_added', { n: add })); }
+  pupilMeters();
+}
+function pupilToast(msg) {
+  var b = $('p-toast');
+  b.textContent = msg; b.hidden = false;
+  clearTimeout(P.toast); P.toast = setTimeout(function () { b.hidden = true; }, 7000);
 }
 // Priebežné ukladanie na server: pri výmene zariadenia sa odpovede nestratia a učiteľ vidí, koľko má žiak hotovo.
 function pupilQueueSave() { clearTimeout(P.saveTimer); P.saveTimer = setTimeout(pupilSaveNow, SAVE_MS); }
 function pupilSaveNow() {
   clearTimeout(P.saveTimer); P.saveTimer = null;
   var S = P.S; if (!S || S.done) return;
-  api('pupilSave', { t: P.t, p: S.pupilId, d: P.device, ans: S.ans, mk: Object.keys(S.marks) }).catch(function () {});
+  api('pupilSave', { t: P.t, p: S.pupilId, d: P.device, ans: S.ans, mk: Object.keys(S.marks) }).then(pupilTime).catch(function () {});
 }
 // Pred odovzdaním: ktoré otázky sú bez odpovede a ktoré sú označené. Čas medzitým beží ďalej.
 function pupilAskSubmit() {
@@ -441,8 +481,9 @@ function pupilLockState(r) {
   }
   // vrátený do testu: pokračuje so zvyšným časom; ak učiteľ strhol body, dozvie sa to
   var pen = (r.leaves || 0) > (S.leaves || 0);
-  S.leaves = Math.max(S.leaves || 0, r.leaves || 0); S.lock = 0; pSave();
+  S.leaves = Math.max(S.leaves || 0, r.leaves || 0); S.lock = 0; if (typeof r.ad === 'number') S.ad = r.ad; pSave();
   if (typeof r.left === 'number') P.deadline = Date.now() + r.left;
+  P.syncAt = Date.now();
   P.phase = 'test'; P.lockOk = false; P.startSent = false;
   pupilWake();
   if (pen) {
