@@ -1,5 +1,16 @@
 # Zmeny
 
+## 1.12 (2026-11-19) – treba vymeniť skript tabuľky
+
+- **Názov písomky je jej id.** Pri novej písomke sa názov predvyplní podľa testu z hárka Otázky; podľa neho sa volá odkaz a QR kód,
+  hárok výsledkov (`Res_<názov>`) aj priečinok s PDF na Disku.
+- Povolené sú len písmená bez diakritiky, číslice, `-` a `_` (bez medzier a bodiek), najviac 40 znakov. Názov musí byť unikátny,
+  na veľkých a malých písmenách nezáleží (`Geo7A_EuFy` = `geo7a_eufy`). Neplatný alebo už použitý názov je červený a písomka sa nedá spustiť,
+  kým ho nezmeníš. Predvyplnený názov z testu s diakritikou alebo medzerami treba tiež upraviť. V hárku Otázky môžu byť názvy testov ľubovoľné.
+- V zozname písomiek je namiesto id čas vytvorenia a spustenia („vytvorená 18.11. 08:38 · spustená 08:41“, pripravená písomka „nespustená“).
+  Čas spustenia je v novom stĺpci **spustený** v hárku Testy (prvé otvorenie, znovuotvorenie uzavretej písomky ho nemení).
+- Staršie písomky si nechávajú svoje id, hárky aj priečinky; odkazy a QR kódy fungujú ďalej.
+
 ## 1.11 (2026-11-18) – treba vymeniť skript tabuľky
 
 - **Pridať čas v prehľade.** Pri každom žiakovi, ktorý píše (aj pri zamknutom), je tlačidlo **+2 min**. Dá sa ťukať opakovane, každé ťuknutie pridá 2 minúty.

@@ -18,6 +18,10 @@ Ak písomka nestačí na čas, učiteľ v prehľade pridá žiakovi (alebo všet
 | **Čas** | učiteľ | Meno, Čas: žiaci, ktorí majú na písomku viac času (prázdny Čas = +50 %, inak napr. `25 %` alebo `5 min`) |
 | Testy, Res_…, _balíky | skript | spustené písomky, výsledky (písmeno alebo napísaná odpoveď, ✓ / ✗ / ? na kontrolu), snímka otázok |
 
+- **Názov písomky** (od verzie 1.12) je zároveň jej id: odkaz a QR kód, hárok výsledkov `Res_<názov>` aj priečinok s PDF na Disku.
+  Len písmená bez diakritiky, číslice, `-` a `_`, najviac 40 znakov, unikátny bez ohľadu na veľké písmená. Predvyplní sa podľa testu;
+  ak nie je platný alebo už existuje, je červený a písomka sa nedá spustiť.
+
 - Všetky riadky s rovnakým názvom v stĺpci **Test** tvoria jeden test.
 - **Skupiny:** ak test má otázky pre A aj B a trieda má v hárku Žiaci žiakov v A aj B, každá skupina píše svoje otázky
   (otázky bez skupiny píšu obe). Trieda bez skupín píše podľa voľby učiteľa všetky otázky, len A alebo len B.

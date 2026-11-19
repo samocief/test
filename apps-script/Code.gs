@@ -35,8 +35,11 @@
  * Od 1.11: učiteľ (alebo dozor) môže v prehľade pridať žiakovi čas (ADD_MIN minút, aj opakovane), alebo naraz všetkým, ktorí práve píšu.
  * Žiakovi, ktorý už odovzdal, sa tým test znova otvorí (kým je test otvorený): pokračuje so svojimi odpoveďami, so zvyšným časom z chvíle
  * odovzdania + pridaným časom. Čas mu začne bežať, až keď sa vráti do testu. Po novom odovzdaní sa jeho predošlý riadok výsledkov nahradí.
+ *
+ * Od 1.12: id písomky = jej názov, ktorý napíše učiteľ (len A–Z, a–z, 0–9, - a _, najviac NAME_MAX znakov, unikátny bez ohľadu na veľké písmená).
+ * Podľa neho sa volá hárok výsledkov „Res_<názov>“ aj priečinok s PDF. Staršie písomky si nechávajú svoje id. Nový stĺpec „spustený“ v hárku Testy.
  */
-const VERSION = '1.11';
+const VERSION = '1.12';
 const APP_URL = 'https://samocief.github.io/test/';
 const APP_NAME = 'Písomky';
 
@@ -47,7 +50,9 @@ const EXTRA_HEAD = ['Meno', 'Čas'];   // hárok má nenápadný názov, aby ži
 const EXTRA_PCT = 0.5;               // žiak z hárka Čas bez vlastnej hodnoty: +50 % celkového času testu
 const PUPIL_HEAD = ['Trieda', 'Rad', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'B'];   // nový hárok Žiaci: zasadací poriadok
 const TEST_HEAD = ['id testu', 'vytvorený', 'trieda', 'test z banky', 'názov', 'stav', 'celkový čas (min)', 'počet otázok', 'skupiny',
-  'miešať možnosti', 'žiak po uzavretí uvidí', 'otázky A', 'otázky B', 'uzavretý o', 'šachovnica'];
+  'miešať možnosti', 'žiak po uzavretí uvidí', 'otázky A', 'otázky B', 'uzavretý o', 'šachovnica', 'spustený'];
+const NAME_MAX = 40;                              // najdlhší názov písomky (= id testu)
+const NAME_RE = /^[A-Za-z0-9_-]+$/;              // povolené znaky názvu: bez diakritiky, medzier a bodiek (kvôli URL, hárkom a priečinkom)
 const RES_FIXED = ['odoslané', 'žiak', 'skupina', 'výsledok (%)', 'body'];
 const RES_TAIL = ['odchody', 'odpovede', 'príznak'];
 const LEAVE_PENALTY = 0.10;    // strhnutie z celkového výsledku, keď učiteľ vráti žiaka so strhnutím (10 percentuálnych bodov, najviac raz)
@@ -597,7 +602,7 @@ function testObj_(t, row) {
   const list = function (v) { return s_(v).split(';').map(function (x) { return x.trim(); }).filter(String); };
   const keysA = list(g('otazky a')), keysB = list(g('otazky b'));
   return {
-    id: s_(g('id testu')), created: s_(g('vytvoreny')), cls: s_(g('trieda')), bank: s_(g('test z banky')), title: s_(g('nazov')),
+    id: s_(g('id testu')), created: s_(g('vytvoreny')), started: s_(g('spusteny')), cls: s_(g('trieda')), bank: s_(g('test z banky')), title: s_(g('nazov')),
     state: st === normName(STATE.closed) ? 'closed' : st === normName(STATE.ready) ? 'ready' : 'open',
     total: Math.max(1, num_(g('celkovy cas')) || 10), groups: keysB.length > 0, alt: keysB.length > 0 && normName(g('sachovnica')) === 'ano',
     shuffle: yes_(g('miesat')), reveal: normName(g('ziak po')) === normName(REVEAL.pct) ? 'pct' : 'all',
@@ -1350,14 +1355,24 @@ function tInit_() {
   pupils.filter(function (p) { return p.active; }).forEach(function (p) { (classes[p.cls] = classes[p.cls] || []).push(p.label); });
   const t = testsTable_();
   const tests = t.rows.map(function (r) { return testObj_(t, r); }).filter(function (x) { return x.id; })
-    .map(function (x) { return { id: x.id, created: x.created, cls: x.cls, bank: x.bank, title: x.title, n: (x.groups ? x.keysA : x.keys).length, groups: x.groups, alt: x.alt, total: x.total, state: x.state }; });
-  return { v: VERSION, classes: classes, groups: classGroups_(pupils), penalty: LEAVE_PENALTY, tests: tests, bank: readBank_(), sheetUrl: ss_().getUrl(), sheetName: ss_().getName() };
+    .map(function (x) { return { id: x.id, created: x.created, started: x.started, cls: x.cls, bank: x.bank, title: x.title, n: (x.groups ? x.keysA : x.keys).length, groups: x.groups, alt: x.alt, total: x.total, state: x.state }; });
+  return { v: VERSION, classes: classes, groups: classGroups_(pupils), penalty: LEAVE_PENALTY, tests: tests, taken: takenNames_(t), nameMax: NAME_MAX,
+    bank: readBank_(), sheetUrl: ss_().getUrl(), sheetName: ss_().getName() };
+}
+// Obsadené názvy písomiek (malými písmenami): id testov, staré id (prezývky) a hárky výsledkov „Res_…“.
+function takenNames_(t) {
+  const out = {}, cI = t.need('id testu'), add = function (x) { x = String(x || '').trim().toLowerCase(); if (x) out[x] = 1; };
+  t.rows.forEach(function (r) { add(r[cI]); });
+  Object.keys(aliases_()).forEach(add);
+  ss_().getSheets().forEach(function (sh) { const m = /^res_(.+)$/i.exec(sh.getName()); if (m) add(m[1]); });
+  return Object.keys(out);
 }
 // cfg: {cls, bank (názov testu v hárku Otázky), title, total (min), state, shuffle, reveal ('all'|'pct'), only ('all'|'A'|'B' pri triede bez skupín), alt (šachovnica)}
 // Otázky si skript prečíta z hárka Otázky sám a uloží ich snímku (balík) k testu.
 function tCreateTest_(req) {
-  const cfg = req.cfg || {}, cls = String(cfg.cls || '').trim();
+  const cfg = req.cfg || {}, cls = String(cfg.cls || '').trim(), name = String(cfg.title || '').trim();
   if (!cls) fail_('bad_request');
+  if (!name || name.length > NAME_MAX || !NAME_RE.test(name)) fail_('bad_name', name);
   const bank = readBank_().tests.filter(function (x) { return normName(x.name) === normName(cfg.bank); })[0];
   if (!bank || !bank.qs.length) fail_('no_questions', String(cfg.bank || ''));
   const cg0 = classGroups_(readPupils_())[cls] || { A: 0, B: 0, none: [], alt: { A: 0, B: 0 } };
@@ -1378,14 +1393,14 @@ function tCreateTest_(req) {
     pack.q[q.k] = q.text ? { q: q.q, opts: [], ok: null, text: 1, acc: q.acc, add: [], rej: [], img: q.img, g: q.g, row: q.row } : { q: q.q, opts: q.opts, ok: q.ok, img: q.img, g: q.g, row: q.row }; });
   return withLock_(function () {
     const t = testsTable_();
-    // id: trieda_mesiac-deň_hodina:minúta, napr. 9A_10-25_19:49 (pri zhode sa pridá písmeno: 9A_10-25_19:49a)
-    let id = (cls.replace(/[^0-9A-Za-z]/g, '').slice(0, 8) || 'test') + '_' + now_('MM-dd_HH:mm');
-    const ids = t.rows.map(function (r) { return s_(r[t.need('id testu')]); });
-    for (let k = 97; ids.indexOf(id) >= 0 || ss_().getSheetByName(resultsName_(id)) || ss_().getSheetByName(oldResultsName_(id)); k++) id = id.replace(/[a-z]?$/, String.fromCharCode(k));
+    // id = názov písomky od učiteľa; musí byť unikátny bez ohľadu na veľké písmená (hárky a priečinky na Disku)
+    const id = name;
+    if (takenNames_(t).indexOf(id.toLowerCase()) >= 0 || ss_().getSheetByName(oldResultsName_(id))) fail_('name_taken', id);
     const row = t.head.map(function () { return ''; });
     const put = function (p, v) { const i = t.col(p); if (i >= 0) row[i] = v; };
-    put('id testu', id); put('vytvoreny', now_('yyyy-MM-dd HH:mm')); put('trieda', cls); put('test z banky', bank.name);
-    put('nazov', String(cfg.title || bank.name).slice(0, 80)); put('stav', cfg.state === 'ready' ? STATE.ready : STATE.open); put('celkovy cas', total);
+    const created = now_('yyyy-MM-dd HH:mm'), started = cfg.state === 'ready' ? '' : created;
+    put('id testu', id); put('vytvoreny', created); put('spusteny', started); put('trieda', cls); put('test z banky', bank.name);
+    put('nazov', id); put('stav', cfg.state === 'ready' ? STATE.ready : STATE.open); put('celkovy cas', total);
     put('pocet', keysA.length); put('skupiny', groups ? 'A/B' : cfg.only === 'A' || cfg.only === 'B' ? 'len ' + cfg.only : '');
     put('miesat', cfg.shuffle === false ? 'nie' : 'áno'); put('ziak po', cfg.reveal === 'pct' ? REVEAL.pct : REVEAL.all);
     put('otazky a', keysA.join('; ')); put('otazky b', keysB.join('; ')); put('sachovnica', groups && alt ? 'áno' : '');
@@ -1395,7 +1410,7 @@ function tCreateTest_(req) {
     savePack_(id, pack);
     createResultsSheet_(test, pack);
     try { pruneLogins_(testsTable_()); } catch (e) { /* upratovanie nie je dôležité */ }
-    return { id: id, cls: cls, dk: dozorKey_(id), total: total, n: keysA.length, groups: groups, alt: groups && alt };
+    return { id: id, cls: cls, dk: dozorKey_(id), total: total, n: keysA.length, groups: groups, alt: groups && alt, created: created, started: started };
   });
 }
 function tTest_(req) {
@@ -1438,6 +1453,9 @@ function tSetTest_(req) {
     // čas uzavretia: od neho beží REVIEW_MIN minút, keď žiaci vidia výsledky
     const c = t.col('uzavrety o');
     if (c >= 0) t.sheet.getRange(f.rowIndex, c + 1).setNumberFormat('@').setValue(patch.state === 'closed' ? now_() : '');
+    // čas spustenia: prvé otvorenie pripravenej písomky (znovuotvorenie uzavretej ho nemení)
+    const cS = t.col('spusteny');
+    if (patch.state === 'open' && f.test.state === 'ready' && cS >= 0 && !f.test.started) t.sheet.getRange(f.rowIndex, cS + 1).setNumberFormat('@').setValue(now_('yyyy-MM-dd HH:mm'));
   }
   if (patch.reveal && !req.dozor) set('ziak po', patch.reveal === 'pct' ? REVEAL.pct : REVEAL.all);
   forgetTest_(f.test.id);

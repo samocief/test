@@ -3,7 +3,9 @@
  * môže ju spustiť a uzavrieť, vracať zamknutých žiakov do testu, označiť neprítomných a skopírovať výsledky. Jeho odkaz sa nikam neukladá.
  */
 var T = { s: '', k: '', dz: false, dk: '', init: null, oldScript: false, listOpen: false, cur: null, poll: null, tab: 'new', sub: 'over', showRes: false, qsForce: false };
-var FORM_KEY = 'form', NEED_SCRIPT = '1.11';
+var FORM_KEY = 'form', NEED_SCRIPT = '1.12';
+// Názov písomky je zároveň jej id (odkaz, QR, hárok výsledkov, priečinok s PDF): bez diakritiky, medzier a bodiek, unikátny bez ohľadu na veľké písmená.
+var NAME_RE = /^[A-Za-z0-9_-]+$/, NAME_MAX = 40;
 
 function tStatus(id, msg, cls) { var e = $(id); e.textContent = msg || ''; e.className = 'small ' + (cls || 'muted'); e.hidden = !msg; }
 function appBase() { return location.origin + location.pathname.replace(/[^/]*$/, ''); }
@@ -111,16 +113,18 @@ function tForm() {
       .concat(I.bank.errors.length > 12 ? [el('li', { text: '…' })] : [])));
   }
   eb.hidden = !I.bank.errors.length;
-  $('f-title').value = '';
+  $('f-title').value = ''; tNameCheck();
   $('f-time').value = F.total || 15;
   $('f-shuffle').checked = F.shuffle !== false;
   $('f-reveal').value = F.reveal === 'pct' ? 'pct' : 'all';
   sel.onchange = function () { sel.classList.remove('invalid'); tStatus('start-msg', ''); tPlanInfo(); };
   bs.onchange = function () {
     bs.classList.remove('invalid'); tStatus('start-msg', '');
-    var b = bankTest(); $('f-title').placeholder = b ? b.name : t('t.title_ph');
+    // názov sa predvyplní podľa testu; ak nie je platný alebo unikátny, ostane červený a učiteľ ho musí zmeniť
+    var b = bankTest(); $('f-title').value = b ? b.name : ''; tNameCheck();
     tPlanInfo();
   };
+  $('f-title').oninput = function () { tStatus('start-msg', ''); tNameCheck(); };
   $('f-time').onchange = function () { var m = Math.max(1, Math.min(240, parseInt($('f-time').value, 10) || 15)); $('f-time').value = m; saveForm({ total: m }); };
   $('f-shuffle').onchange = function () { saveForm({ shuffle: $('f-shuffle').checked }); };
   $('f-reveal').onchange = function () { saveForm({ reveal: $('f-reveal').value }); };
@@ -185,20 +189,49 @@ async function tStart(state) {
   var c = $('f-cls').value, b = bankTest(), plan = tPlan();
   $('f-cls').classList.toggle('invalid', !c); $('f-bank').classList.toggle('invalid', !b);
   if (!c || !b) { tStatus('start-msg', t(!c && !b ? 't.err_required' : !c ? 't.err_class' : 't.err_bank'), 'bad'); (!c ? $('f-cls') : $('f-bank')).focus(); return; }
+  if (tNameCheck(true)) { $('f-title').focus(); return; }
   if (plan.groups && plan.g.none.length && !confirm(t('t.groups_confirm', { names: plan.g.none.join(', ') }))) return;
-  var title = $('f-title').value.trim() || b.name, total = Math.max(1, Math.min(240, parseInt($('f-time').value, 10) || 15));
+  var title = $('f-title').value.trim(), total = Math.max(1, Math.min(240, parseInt($('f-time').value, 10) || 15));
   var cfg = { cls: c, bank: b.name, title: title, total: total, state: state, shuffle: $('f-shuffle').checked, reveal: $('f-reveal').value, only: plan.groups ? 'all' : plan.only, alt: !!(plan.groups && plan.alt) };
   $('start').disabled = $('prepare').disabled = true; tStatus('start-msg', t('t.saving'));
   try {
     var r = await api('tCreateTest', A({ cfg: cfg }));
     tStatus('start-msg', '');
-    var x = { id: r.id, created: '', cls: r.cls || c, bank: b.name, title: title, n: r.n, groups: !!r.groups, alt: !!r.alt, total: r.total || total, state: state, dk: r.dk || '' };
+    var x = { id: r.id, created: r.created || nowStr(), started: r.started !== undefined ? r.started : state === 'open' ? nowStr() : '', cls: r.cls || c, bank: b.name, title: r.id || title, n: r.n, groups: !!r.groups, alt: !!r.alt, total: r.total || total, state: state, dk: r.dk || '' };
     T.init.tests.push(x);
+    (T.init.taken = T.init.taken || []).push(String(x.id).toLowerCase());
     // ďalšia písomka sa začína s prázdnou triedou, testom a skrytými otázkami
-    $('f-cls').value = ''; $('f-bank').value = ''; $('f-title').value = ''; $('f-title').placeholder = t('t.title_ph'); tListToggle(false); tPlanInfo();
+    $('f-cls').value = ''; $('f-bank').value = ''; $('f-title').value = ''; tNameCheck(); tListToggle(false); tPlanInfo();
     tStarted(x);
   } catch (e) { tStatus('start-msg', t('t.err_save', { msg: errText(e) }), 'bad'); }
   $('start').disabled = $('prepare').disabled = false;
+  tNameCheck();
+}
+// Kontrola názvu písomky: vráti chybu ('empty' | 'chars' | 'long' | 'taken') alebo ''. Chybný názov je červený a písomka sa nedá spustiť.
+// Prázdny názov sa vyznačí až pri pokuse o spustenie (show).
+function nameTaken(v) {
+  var k = String(v).toLowerCase(), list = (T.init && T.init.taken) || ((T.init && T.init.tests) || []).map(function (x) { return String(x.id).toLowerCase(); });
+  return list.indexOf(k) >= 0;
+}
+function tNameCheck(show) {
+  var inp = $('f-title'), v = inp.value.trim(), max = (T.init && T.init.nameMax) || NAME_MAX;
+  var err = !v ? 'empty' : v.length > max ? 'long' : !NAME_RE.test(v) ? 'chars' : nameTaken(v) ? 'taken' : '';
+  var mark = !!err && (err !== 'empty' || !!show);
+  inp.classList.toggle('invalid', mark);
+  tStatus('f-title-msg', mark ? t('t.name_' + err, { max: max }) : '', 'bad');
+  $('start').disabled = $('prepare').disabled = T.oldScript || (!!err && err !== 'empty');
+  return err;
+}
+function nowStr() { var d = new Date(), p = function (x) { return ('0' + x).slice(-2); }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+// „vytvorená 18.11. 08:38 · spustená 08:41“ (pri inom dni aj s dátumom), pripravená: „· nespustená“
+function whenText(x) {
+  var m = function (s) { return /^(\d{4})-(\d\d)-(\d\d)[ T](\d\d):(\d\d)/.exec(String(s || '')); };
+  var c = m(x.created), s = m(x.started), day = function (a) { return (+a[3]) + '.' + (+a[2]) + '.'; }, hm = function (a) { return a[4] + ':' + a[5]; };
+  var out = [];
+  if (c) out.push(t('t.when_created', { when: day(c) + ' ' + hm(c) })); else if (x.created) out.push(t('t.when_created', { when: x.created }));
+  if (s) out.push(t('t.when_started', { when: c && day(c) === day(s) && c[1] === s[1] ? hm(s) : day(s) + ' ' + hm(s) }));
+  else if (x.state === 'ready') out.push(t('t.when_not_started'));
+  return out.join(' · ');
 }
 function tStarted(x) {
   tTab('started');
@@ -210,7 +243,7 @@ function tStarted(x) {
   $('started-go').hidden = !ready;
   $('started-go').onclick = async function () {
     $('started-go').disabled = true;
-    try { await api('tSetTest', A({ t: x.id, patch: { state: 'open' } })); x.state = 'open'; tStarted(x); }
+    try { await api('tSetTest', A({ t: x.id, patch: { state: 'open' } })); x.state = 'open'; if (!x.started) x.started = nowStr(); tStarted(x); }
     catch (e) { tStatus('t-status', errText(e), 'bad'); }
     $('started-go').disabled = false;
   };
@@ -254,14 +287,14 @@ function stateBadge(state) { return el('span', { class: 'badge' + (state === 'op
 async function tTests() {
   var box = $('tests-list');
   box.innerHTML = ''; box.appendChild(el('p', { class: 'muted' }, [el('span', { class: 'spin' }), t('common.loading')]));
-  try { var init = await apiRetry('tInit', A(), 2); T.init.tests = init.tests; T.init.classes = init.classes; T.init.groups = init.groups; T.init.bank = init.bank; } catch (e) { /* ukážeme, čo máme */ }
+  try { var init = await apiRetry('tInit', A(), 2); T.init.tests = init.tests; if (init.taken) T.init.taken = init.taken; T.init.classes = init.classes; T.init.groups = init.groups; T.init.bank = init.bank; } catch (e) { /* ukážeme, čo máme */ }
   box.innerHTML = '';
   var rows = T.init.tests.slice().reverse();
   if (!rows.length) { box.appendChild(el('p', { class: 'muted', text: t('t.no_tests') })); return; }
   var tb = el('tbody');
   rows.forEach(function (x) {
     tb.appendChild(el('tr', {}, [
-      el('td', {}, [el('b', { text: x.title || x.id }), el('br'), el('span', { class: 'small muted', text: [x.created, x.id].filter(Boolean).join(' · ') })]),
+      el('td', {}, [el('b', { text: x.title || x.id }), el('br'), el('span', { class: 'small muted', text: whenText(x) })]),
       el('td', { text: x.cls }), el('td', { class: 'num', text: String(x.n) + (x.groups ? ' (A/B)' : '') }),
       el('td', {}, [stateBadge(x.state)]),
       el('td', {}, [el('button', { type: 'button', class: 'mini', text: t('t.open'), onclick: function () { tOpenTest(x.id); } })])]));
@@ -339,7 +372,7 @@ function tHead() {
   $('test-toggle').className = st === 'closed' ? '' : 'primary';
   $('test-toggle-hint').textContent = st === 'ready' ? t('t.ready_hint') : st === 'open' ? t('t.close_hint', { min: x.review || 15 }) : t('t.closed_hint', { min: x.review || 15 });
   $('test-meta').textContent = [t('t.class_short', { cls: x.cls }), x.bank && x.bank !== x.title ? x.bank : '', t('t.n_questions', { n: (x.groups ? x.keysA : x.keys).length }), x.groups ? t('t.groups_ab') : '', x.alt ? t('t.alt_short') : '',
-    t('t.time_short', { n: x.total }), x.created, x.id].filter(Boolean).join(' · ');
+    t('t.time_short', { n: x.total }), whenText(x), x.id !== x.title ? x.id : ''].filter(Boolean).join(' · ');
 }
 async function tToggleState() {
   var x = T.cur.d.test, next = NEXT_STATE[x.state] || 'open';
@@ -347,8 +380,8 @@ async function tToggleState() {
   $('test-toggle').disabled = true;
   try {
     await api('tSetTest', A({ t: T.cur.id, patch: { state: next } }));
-    x.state = next; tHead();
-    if (T.init) T.init.tests.forEach(function (y) { if (y.id === T.cur.id) y.state = next; });
+    x.state = next; if (next === 'open' && !x.started) x.started = nowStr(); tHead();
+    if (T.init) T.init.tests.forEach(function (y) { if (y.id === T.cur.id) { y.state = next; if (next === 'open' && !y.started) y.started = x.started; } });
     if (T.sub === 'qs') tQs();
   } catch (e) { tStatus('test-msg', errText(e), 'bad'); }
   $('test-toggle').disabled = false;

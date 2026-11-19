@@ -40,7 +40,9 @@
     "no_questions": "V hárku Otázky nie sú pre test „{msg}“ žiadne platné otázky.",
     "unknown": "Nastala chyba: {msg}",
     "not_started": "Test ešte nezačal.",
-    "logged_in": "Žiak je už prihlásený, nemôže byť neprítomný."
+    "logged_in": "Žiak je už prihlásený, nemôže byť neprítomný.",
+    "bad_name": "Názov písomky môže mať len písmená bez diakritiky, číslice, - a _ (najviac 40 znakov).",
+    "name_taken": "Písomka s názvom „{msg}“ už existuje. Zmeň názov."
   },
   "p": {
     "no_link": "Tento odkaz nie je na test. Na písomku naskenuj QR kód od učiteľa.",
@@ -170,7 +172,14 @@
     "bank_errors": { "one": "{n} riadok v hárku Otázky má chybu a do testu sa nedostane:", "few": "{n} riadky v hárku Otázky majú chybu a do testu sa nedostanú:", "other": "{n} riadkov v hárku Otázky má chybu a do testu sa nedostane:" },
     "row_err": "riadok {row}: {msg}",
     "title": "Názov písomky",
-    "title_ph": "Napr. Ekosystémy – 7.A",
+    "title_ph": "Napr. Bio7A_Ekosystemy",
+    "name_empty": "Napíš názov písomky.",
+    "name_chars": "Len písmená bez diakritiky, číslice, - a _ (bez medzier a bodiek).",
+    "name_long": "Najviac {max} znakov.",
+    "name_taken": "Písomka s týmto názvom už existuje (na veľkých a malých písmenách nezáleží). Zmeň názov.",
+    "when_created": "vytvorená {when}",
+    "when_started": "spustená {when}",
+    "when_not_started": "nespustená",
     "time": "Celkový čas (min)",
     "shuffle": "Miešať poradie možností (každý žiak má iné písmená)",
     "shuffle_note": "Poradie otázok sa mieša vždy.",
