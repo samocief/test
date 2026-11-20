@@ -1,5 +1,17 @@
 # Zmeny
 
+## 1.13 (2026-11-20) – treba vymeniť skript tabuľky
+
+- **Úprava pre dyslexiu pre žiakov z hárka Čas** (okrem viac času, ten sa nemení – predvolene +50 %, alebo hodnota v stĺpci Čas):
+  - väčšie písmo, riadkovanie a medzery medzi písmenami a slovami (úvod, otázky, možnosti, políčko na odpoveď aj výsledky),
+  - tlačidlo s reproduktorom vedľa otázky: prečíta nahlas otázku a možnosti v poradí, v akom ich žiak vidí („A: …, B: …“), práve čítaná časť sa zvýrazní.
+    Ďalšie ťuknutie čítanie zastaví, pri prechode na inú otázku sa zastaví samo. Používa hlas telefónu (slovenský, ak ho nemá, český) – žiak potrebuje slúchadlá.
+  - Ostatní žiaci nič nevidia. Na vyskúšanie napíš do hárka Čas meno **Učiteľ**: prihlásenie Učiteľ v teste dostane úpravu (čas navyše nie).
+- **Tlačiť / PDF** v Novej písomke (vedľa Ukázať otázky): test z hárka Otázky na papier. Hlavička s menom, triedou, dátumom a bodmi,
+  otázky v poradí z hárka, pri otázke na dopísanie alebo s číslom čiara. Voľby: skupina A aj B (každá na samostatných stranách), len A, len B
+  alebo všetky otázky spolu; **väčšie písmo a riadkovanie (dyslexia)** – 14 bodov, riadkovanie 1,7, možnosti pod sebou, viac miesta na písanie;
+  **so správnymi odpoveďami** (kľúč). PDF: v okne tlače vyber „Uložiť ako PDF“. Voľby si aplikácia pamätá.
+
 ## 1.12 (2026-11-19) – treba vymeniť skript tabuľky
 
 - **Názov písomky je jej id.** Pri novej písomke sa názov predvyplní podľa testu z hárka Otázky; podľa neho sa volá odkaz a QR kód,

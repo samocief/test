@@ -38,8 +38,11 @@
  *
  * Od 1.12: id písomky = jej názov, ktorý napíše učiteľ (len A–Z, a–z, 0–9, - a _, najviac NAME_MAX znakov, unikátny bez ohľadu na veľké písmená).
  * Podľa neho sa volá hárok výsledkov „Res_<názov>“ aj priečinok s PDF. Staršie písomky si nechávajú svoje id. Nový stĺpec „spustený“ v hárku Testy.
+ *
+ * Od 1.13: žiaci z hárka Čas majú aj úpravu pre dyslexiu: väčšie písmo a riadkovanie a tlačidlo na prečítanie otázky (pupilLogin vráti dys: 1).
+ * Meno „Učiteľ“ v hárku Čas zapne úpravu aj pre prihlásenie učiteľa (na vyskúšanie), čas sa učiteľovi nepridáva.
  */
-const VERSION = '1.12';
+const VERSION = '1.13';
 const APP_URL = 'https://samocief.github.io/test/';
 const APP_NAME = 'Písomky';
 
@@ -294,6 +297,8 @@ function pupilTotal_(test, label) {
   const x = label && label !== TEACHER ? readExtra_()[extraKey_(label)] : null;
   return !x ? test.total : test.total + Math.ceil(x.pct ? test.total * x.pct : x.min);
 }
+// Úprava pre dyslexiu (väčšie písmo, predčítanie): každý z hárka Čas, aj „Učiteľ“ (aby si to učiteľ mohol vyskúšať).
+function pupilDys_(label) { return !!(label && readExtra_()[extraKey_(label)]); }
 // Kľúč a adresa sa ukladajú spolu s id tabuľky: v kópii tabuľky (iný učiteľ) neplatia a vytvoria sa nové.
 function ownProp_(name) {
   const v = props_().getProperty(name);
@@ -966,7 +971,8 @@ function pupilLogin_(req) {
   // Ak už žiak začal (napr. na inom zariadení pred odomknutím), pokračuje so zvyšným časom a s uloženými odpoveďami.
   const st = starts_(testId)[me.id], prog = progGet_(testId, me.id);
   const total = st && st.tot ? st.tot : pupilTotal_(test, me.label);
-  const out = { ok: true, pid: me.id, name: me.label, group: group, total: total, penalty: LEAVE_PENALTY, shuffle: test.shuffle, keys: keys, qs: publicQs_(pack, keys), begun: !!st };
+  const out = { ok: true, pid: me.id, name: me.label, group: group, total: total, penalty: LEAVE_PENALTY, shuffle: test.shuffle, keys: keys, qs: publicQs_(pack, keys), begun: !!st,
+    dys: pupilDys_(me.label) ? 1 : 0 };
   if (st) { out.left = leftOf_(st, test); out.ad = st.ad || 0; out.leaves = st.pen || 0; out.lock = st.lk ? 1 : 0; out.end = st.end ? 1 : 0; out.ep = epOf_(st); }
   if (prog) { out.ans = cleanAns_(prog.ans, keys, pack); out.marks = (prog.mk || []).filter(function (k) { return keys.indexOf(k) >= 0; }); }
   return out;
@@ -1198,7 +1204,7 @@ function pupilResult_(req) {
   if (!mine) fail_('no_result');
   const pack = loadPack_(testId), sc = scoreOf_(pack, mine.keys, mine.ans, mine.leaves);
   const out = { name: mine.name, cls: test.cls, title: test.title, sent: mine.sent, group: mine.group, ok: sc.ok, n: sc.n, pct: sc.pct, leaves: mine.leaves, penalty: LEAVE_PENALTY,
-    ended: mine.ended, reveal: test.reveal, left: left };
+    ended: mine.ended, reveal: test.reveal, left: left, dys: pupilDys_(mine.name) ? 1 : 0 };
   if (test.reveal === 'all') {
     out.keys = mine.keys; out.ans = mine.ans; out.qs = {}; out.st = {}; out.pts = {};
     mine.keys.forEach(function (k) {

@@ -2,8 +2,8 @@
  * Dozor (suplujúci učiteľ) dostane odkaz ucitel.html?s=<skript>&t=<test>&dk=<kľúč testu>: vidí len prehľad jednej písomky,
  * môže ju spustiť a uzavrieť, vracať zamknutých žiakov do testu, označiť neprítomných a skopírovať výsledky. Jeho odkaz sa nikam neukladá.
  */
-var T = { s: '', k: '', dz: false, dk: '', init: null, oldScript: false, listOpen: false, cur: null, poll: null, tab: 'new', sub: 'over', showRes: false, qsForce: false };
-var FORM_KEY = 'form', NEED_SCRIPT = '1.12';
+var T = { s: '', k: '', dz: false, dk: '', init: null, oldScript: false, listOpen: false, printOpen: false, cur: null, poll: null, tab: 'new', sub: 'over', showRes: false, qsForce: false };
+var FORM_KEY = 'form', NEED_SCRIPT = '1.13';
 // Názov písomky je zároveň jej id (odkaz, QR, hárok výsledkov, priečinok s PDF): bez diakritiky, medzier a bodiek, unikátny bez ohľadu na veľké písmená.
 var NAME_RE = /^[A-Za-z0-9_-]+$/, NAME_MAX = 40;
 
@@ -128,7 +128,12 @@ function tForm() {
   $('f-time').onchange = function () { var m = Math.max(1, Math.min(240, parseInt($('f-time').value, 10) || 15)); $('f-time').value = m; saveForm({ total: m }); };
   $('f-shuffle').onchange = function () { saveForm({ shuffle: $('f-shuffle').checked }); };
   $('f-reveal').onchange = function () { saveForm({ reveal: $('f-reveal').value }); };
-  tListToggle(false);
+  $('pr-dys').checked = !!F.prDys; $('pr-key').checked = !!F.prKey;
+  $('pr-dys').onchange = function () { saveForm({ prDys: $('pr-dys').checked }); };
+  $('pr-key').onchange = function () { saveForm({ prKey: $('pr-key').checked }); };
+  $('print-toggle').onclick = function () { tPrintBox(!T.printOpen); };
+  $('pr-go').onclick = tPaper;
+  tListToggle(false); tPrintBox(false);
   tPlanInfo();
 }
 // Pod triedou a testom: kto čo píše. Pri teste so skupinami a triede bez skupín sa učiteľ rozhodne sám.
@@ -173,6 +178,7 @@ function qItem(q, noTag) {
 function tPreview() {
   var box = $('list-box'), b = bankTest(), plan = tPlan();
   $('list-toggle').disabled = !b;
+  tPrintBox(T.printOpen);
   if (!b) { if (T.listOpen) tListToggle(false); box.innerHTML = ''; return; }
   if (!T.listOpen) return;
   box.innerHTML = '';
@@ -201,7 +207,7 @@ async function tStart(state) {
     T.init.tests.push(x);
     (T.init.taken = T.init.taken || []).push(String(x.id).toLowerCase());
     // ďalšia písomka sa začína s prázdnou triedou, testom a skrytými otázkami
-    $('f-cls').value = ''; $('f-bank').value = ''; $('f-title').value = ''; tNameCheck(); tListToggle(false); tPlanInfo();
+    $('f-cls').value = ''; $('f-bank').value = ''; $('f-title').value = ''; tNameCheck(); tListToggle(false); tPrintBox(false); tPlanInfo();
     tStarted(x);
   } catch (e) { tStatus('start-msg', t('t.err_save', { msg: errText(e) }), 'bad'); }
   $('start').disabled = $('prepare').disabled = false;
@@ -267,7 +273,7 @@ function tDozorShow(x) {
 }
 function tPrint(x) {
   var box = $('print-sheet'), meta = [t('t.class_short', { cls: x.cls }), t('t.n_questions', { n: x.n }), t('t.time_short', { n: x.total }), x.groups ? t('t.groups_ab') : '', x.alt ? t('t.alt_short') : ''].filter(Boolean).join(' · ');
-  box.innerHTML = '';
+  box.innerHTML = ''; box.className = '';
   box.appendChild(el('h1', { text: t('app.title') + ': ' + (x.title || x.id) }));
   box.appendChild(el('p', { text: meta }));
   var qrs = el('div', { class: 'pr-qrs' });
@@ -280,6 +286,66 @@ function tPrint(x) {
   [1, 2, 3, 4, 5].forEach(function (i) { ol.appendChild(el('li', { html: t('t.dz_' + i) })); });
   box.appendChild(ol);
   setTimeout(function () { window.print(); }, 50);
+}
+
+/* ---------- písomka na papier (tlač alebo PDF) ---------- */
+// Test z banky na tlač: hlavička s menom, otázky v poradí z hárka Otázky, pri skupinách každá skupina na samostatných stranách.
+// Úprava pre dyslexiu: väčšie písmo, riadkovanie a medzery, možnosti vždy pod sebou. Kľúč: vyznačené správne odpovede.
+function tPrintBox(open) {
+  var b = bankTest(), box = $('pr-groups');
+  T.printOpen = !!(open && b);
+  $('print-box').hidden = !T.printOpen;
+  $('print-toggle').disabled = !b;
+  $('print-toggle').setAttribute('aria-expanded', T.printOpen ? 'true' : 'false');
+  if (!T.printOpen) { tStatus('pr-msg', ''); return; }
+  var testAB = b.A > 0 && b.B > 0, keep = (box.querySelector('input:checked') || {}).value;
+  box.hidden = !testAB;
+  if (!testAB) { box.innerHTML = ''; return; }
+  if (box.dataset.test === b.name && box.firstChild) return;
+  box.dataset.test = b.name; box.innerHTML = '';
+  var nA = b.n - b.B, nB = b.n - b.A;
+  [['AB', t('t.pr_ab')], ['A', t('t.pr_a') + ' (' + nA + ')'], ['B', t('t.pr_b') + ' (' + nB + ')'], ['all', t('t.pr_all') + ' (' + b.n + ')']].forEach(function (o) {
+    var inp = el('input', { type: 'radio', name: 'pr-g', value: o[0] }); inp.checked = (keep || 'AB') === o[0];
+    box.appendChild(el('label', { class: 'chip' }, [inp, ' ' + o[1]]));
+  });
+}
+function paperQ(q, key, dys) {
+  var kids = [el('div', { class: 'pq-q', text: q.q })];
+  if (q.img) kids.push(el('img', { class: 'pq-img', src: q.img, alt: '', onerror: function () { this.remove(); } }));
+  if (q.opts && q.opts.length) {
+    var short = !dys && q.opts.every(function (o) { return String(o).length <= 28; });
+    kids.push(el('ol', { class: 'pq-opts' + (short ? ' two' : '') }, q.opts.map(function (o, i) {
+      var ok = key && i === q.ok;
+      return el('li', { class: ok ? 'pk' : '' }, [el('span', { class: 'lt', text: LETTERS[i] }), el('span', { text: o + (ok ? '  ✓' : '') })]);
+    })));
+  } else kids.push(el('div', { class: 'pq-line' + (q.num ? ' num' : '') }, key ? [el('span', { text: q.num ? numText(q) : (q.acc || []).join('; ') })] : []));
+  return el('li', {}, kids);
+}
+function tPaper() {
+  var b = bankTest(); if (!b) return;
+  var dys = $('pr-dys').checked, key = $('pr-key').checked;
+  var mode = b.A > 0 && b.B > 0 ? (($('pr-groups').querySelector('input:checked') || {}).value || 'AB') : 'all';
+  var sets = mode === 'AB' ? ['A', 'B'] : [mode], box = $('print-sheet');
+  box.innerHTML = ''; box.className = 'paper' + (dys ? ' dys' : '');
+  sets.forEach(function (g) {
+    var qs = b.qs.filter(function (q) { return g === 'all' || q.g !== (g === 'A' ? 'B' : 'A'); });
+    var head = [b.name, g !== 'all' ? t('t.pp_group', { g: g }) : '', key ? t('t.pp_key') : ''].filter(Boolean).join(' · ');
+    var rules = [];
+    if (qs.some(function (q) { return q.opts && q.opts.length; })) rules.push(t('t.pp_rule_pick'));
+    if (qs.some(function (q) { return !(q.opts && q.opts.length); })) rules.push(t('t.pp_rule_line'));
+    var field = function (label, cls) { return el('div', { class: 'pp-f ' + (cls || '') }, [el('span', { text: label }), el('i')]); };
+    box.appendChild(el('section', { class: 'pp' }, [
+      el('h1', { text: head }),
+      key ? null : el('div', { class: 'pp-fields' }, [field(t('t.pp_name'), 'wide'), field(t('t.pp_class')), field(t('t.pp_date'))]),
+      el('div', { class: 'pp-sub' }, [el('span', { text: rules.join(' ') }), el('b', { text: t('t.pp_points', { n: qs.length }) })]),
+      el('ol', { class: 'pq' }, qs.map(function (q) { return paperQ(q, key, dys); }))
+    ]));
+  });
+  // tlačí sa, až keď sú načítané obrázky a písmo (najviac 8 s)
+  tStatus('pr-msg', t('t.pr_wait'));
+  var imgs = [].slice.call(box.querySelectorAll('img')).map(function (im) { return im.complete ? Promise.resolve() : new Promise(function (r) { im.addEventListener('load', r); im.addEventListener('error', r); }); });
+  var fonts = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+  Promise.race([Promise.all(imgs.concat([fonts])), sleep(8000)]).then(function () { tStatus('pr-msg', ''); window.print(); });
 }
 
 /* ---------- zoznam písomiek ---------- */

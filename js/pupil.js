@@ -2,6 +2,7 @@
  * Písomka: jeden celkový čas, žiak sa medzi otázkami voľne presúva, odpovede mení až do odovzdania a počas písania
  * nevidí, či odpovedal správne (správne odpovede v prehliadači nie sú, opravuje skript tabuľky).
  * Čas beží na serveri od ťuknutia na Začať. Skupinu (A/B) určí tabuľka učiteľa.
+ * Žiak z hárka Čas má úpravu pre dyslexiu (dys): väčšie písmo a riadkovanie a tlačidlo, ktoré otázku s možnosťami prečíta nahlas.
  */
 var P = { t: '', info: null, qs: null, S: null, phase: 'idle', tick: null, device: '', blurTimer: null, wake: null, poll: null, wait: null,
   deadline: 0, saveTimer: null, penalty: 0.1, hadFocus: false, hide: null, bootAt: Date.now(), lockPoll: null, lockOk: false, lockLeft: 0, startSent: false, startTimer: null,
@@ -37,6 +38,7 @@ async function pupilStart() {
 }
 function pupilRoute() {
   var info = P.info, saved = store(sessKey());
+  dysApply(saved && saved.dys);
   if (info.state === 'closed') {
     if (saved && saved.pupilId && saved.sent) pupilResults(); else if (saved && saved.pupilId && saved.done) { P.S = saved; pupilFinish(); } else pFail(t('p.closed'));
     return;
@@ -110,6 +112,8 @@ async function pupilLogin(pupilId, saved) {
     if (!o || o.length !== n) { var base = []; for (var i = 0; i < n; i++) base.push(i); S.opt[k] = r.shuffle === false ? base : shuffle(base); }
   });
   S.name = r.name; S.group = r.group || ''; S.total = r.total;
+  if (r.dys !== undefined) S.dys = r.dys ? 1 : 0;
+  dysApply(S.dys);
   // Odpovede uložené na serveri (písal na inom zariadení a učiteľ ho odomkol) doplnia tie, ktoré tu nie sú.
   if (r.ans) Object.keys(r.ans).forEach(function (k) { if (S.ans[k] === undefined && keys.indexOf(k) >= 0) S.ans[k] = r.ans[k]; });
   (r.marks || []).forEach(function (k) { if (keys.indexOf(k) >= 0 && S.marks[k] === undefined) S.marks[k] = 1; });
@@ -136,6 +140,7 @@ function pupilIntro() {
   $('p-intro-num').hidden = !S.order.some(function (k) { return P.qs[k] && P.qs[k].num; });
   $('p-intro-leave').textContent = t('p.rule_leave', { pct: Math.round(P.penalty * 100) });
   $('p-intro-wake').textContent = t('wakeLock' in navigator ? 'p.rule_lock' : 'p.rule_lock_old');
+  $('p-intro-speak').hidden = !(S.dys && TTS.ok);
   $('p-intro-err').hidden = true;
   go.disabled = false; go.textContent = t('p.start');
   go.onclick = async function () {
@@ -169,6 +174,8 @@ function pupilQuestion(keepScroll) {
   $('g-name').textContent = t('p.question_n', { n: S.idx + 1 });
   $('g-i').textContent = S.idx + 1; $('g-n').textContent = S.order.length;
   $('g-q').textContent = q.q;
+  if (!keepScroll) speakStop();   // vlajka ani návrat z prehľadu odovzdania čítanie nezastavia
+  $('g-speak').hidden = !(S.dys && TTS.ok);
   var img = $('g-img'), ibox = $('g-imgbox');
   if (q.img) { if (img.getAttribute('src') !== q.img) img.src = q.img; ibox.hidden = false; img.onerror = function () { ibox.hidden = true; }; }
   else { ibox.hidden = true; img.removeAttribute('src'); }
@@ -324,6 +331,7 @@ function pupilSaveNow() {
 // Pred odovzdaním: ktoré otázky sú bez odpovede a ktoré sú označené. Čas medzitým beží ďalej.
 function pupilAskSubmit() {
   var S = P.S, miss = [], marked = [];
+  speakStop();
   S.order.forEach(function (k, i) { if (S.ans[k] === undefined) miss.push(i); if (S.marks[k]) marked.push(i); });
   $('s-sum').textContent = t('p.sum_done', { done: S.order.length - miss.length, n: S.order.length });
   var list = function (box, idx) {
@@ -344,7 +352,7 @@ function pupilAskSubmit() {
 // od chvíle odchodu a žiaka vráti učiteľ (bez trestu, so strhnutím, alebo mu test ukončí). Stráži sa celý čas písania.
 function pupilGuard() {
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { awayStart('tab'); return; }
+    if (document.hidden) { speakStop(); awayStart('tab'); return; }
     pupilCheckAway(false); pupilWake();
     if (P.poll) pupilPoll();
     if (P.phase === 'lock' && P.lockOk) pupilLockPoll();
@@ -466,6 +474,7 @@ function pupilLock(why, ms, ep) {
 // Obrazovka zamknutého testu so zastaveným časom. ok = server zámok potvrdil, čaká sa už len na učiteľa.
 function pupilLocked(left, ok) {
   P.phase = 'lock'; P.lockOk = !!ok; P.lockLeft = Math.max(0, left || 0);
+  speakStop();
   pupilWakeOff(); clearTimeout(P.lockPoll);
   $('p-lock-time').textContent = t('p.lock_time', { time: fmtClock(P.lockLeft / 1000) });
   pShow('p-lock');
@@ -511,7 +520,7 @@ function pupilLockPoll() {
 
 /* ---------- odovzdanie a čakanie na výsledky ---------- */
 function pupilFinish() {
-  P.phase = 'idle'; pupilWakeOff(); clearInterval(P.tick); clearTimeout(P.saveTimer); clearTimeout(P.blurTimer); $('p-blur').hidden = true;
+  P.phase = 'idle'; pupilWakeOff(); speakStop(); clearInterval(P.tick); clearTimeout(P.saveTimer); clearTimeout(P.blurTimer); $('p-blur').hidden = true;
   clearTimeout(P.lockPoll); P.lockPoll = null; clearTimeout(P.startTimer);
   $('p-small').hidden = true;
   var S = P.S;
@@ -581,6 +590,7 @@ async function pupilResults() {
     if (e.code === 'review_over') { pupilReviewOver(); return; }
     pFail(e.code === 'no_result' || e.code === 'not_logged' ? t('p.no_result') : errText(e)); return;
   }
+  if (R.dys !== undefined) dysApply(R.dys);
   $('r-title').textContent = R.name;
   $('r-sub').textContent = [R.title, t('p.class', { cls: R.cls }), R.group ? t('p.group', { g: R.group }) : ''].filter(Boolean).join(' · ');
   $('r-pct').textContent = fmtPct(R.pct);
@@ -637,11 +647,60 @@ function pupilReviewOver() {
   pFail(t('p.review_over'));
 }
 
+/* ---------- úprava pre dyslexiu: väčšie písmo a predčítanie otázky ---------- */
+// Predčítanie cez hlasový výstup prehliadača (Web Speech API): slovenský hlas, ak ho zariadenie má, inak český.
+// Otázka a každá možnosť idú ako samostatné vety (Chrome dlhý text niekedy uprostred preruší); práve čítaná časť sa zvýrazní.
+var TTS = { ok: 'speechSynthesis' in window && typeof SpeechSynthesisUtterance === 'function', on: false, id: 0 };
+function dysApply(on) {
+  document.body.classList.toggle('dys', !!on);
+  if (on && TTS.ok) try { speechSynthesis.getVoices(); } catch (e) { /* hlasy sa načítajú neskôr */ }
+}
+function ttsVoice() {
+  var v = []; try { v = speechSynthesis.getVoices() || []; } catch (e) { /* bez hlasov */ }
+  var of = function (code) { return v.filter(function (x) { return String(x.lang || '').toLowerCase().replace('_', '-').split('-')[0] === code; }); };
+  var list = of('sk'); if (!list.length) list = of('cs');
+  return list.filter(function (x) { return x.localService; })[0] || list[0] || null;
+}
+function speakMark(node) {
+  [].forEach.call(document.querySelectorAll('.reading'), function (e) { e.classList.remove('reading'); });
+  if (node) node.classList.add('reading');
+}
+function speakBtn() {
+  var b = $('g-speak');
+  b.classList.toggle('on', TTS.on); b.setAttribute('aria-pressed', TTS.on ? 'true' : 'false');
+  b.title = t(TTS.on ? 'p.speak_stop' : 'p.speak'); b.setAttribute('aria-label', b.title);
+}
+function speakStop() {
+  if (!TTS.ok) return;
+  TTS.id++;
+  if (TTS.on) { TTS.on = false; try { speechSynthesis.cancel(); } catch (e) { /* nevadí */ } }
+  speakMark(null); speakBtn();
+}
+function speakQuestion() {
+  if (!TTS.ok || P.phase !== 'test') return;
+  if (TTS.on) { speakStop(); return; }
+  var S = P.S, k = curKey(), q = P.qs[k], voice = ttsVoice(), id = ++TTS.id;
+  // [text, čo zvýrazniť]: otázka, potom možnosti v poradí, v akom ich žiak vidí
+  var parts = [[q.q, function () { return $('g-q'); }]];
+  if (!q.text) S.opt[k].forEach(function (oi, pos) { parts.push([LETTERS[pos] + ': ' + q.opts[oi], function () { return $('g-opts').children[pos]; }]); });
+  try { speechSynthesis.cancel(); } catch (e) { /* nevadí */ }
+  TTS.on = true; speakBtn();
+  parts.forEach(function (p, i) {
+    var u = new SpeechSynthesisUtterance(p[0]);
+    u.lang = voice ? voice.lang : 'sk-SK'; if (voice) u.voice = voice;
+    u.rate = 0.9;
+    u.onstart = function () { if (TTS.id === id && curKey() === k) speakMark(p[1]()); };
+    if (i === parts.length - 1) u.onend = u.onerror = function () { if (TTS.id === id) { TTS.on = false; speakMark(null); speakBtn(); } };
+    speechSynthesis.speak(u);
+  });
+}
+
 /* ---------- tlačidlá a klávesnica ---------- */
 (function () {
   $('g-prev').onclick = function () { pupilGo(P.S.idx - 1); };
   $('g-btn').onclick = function () { var S = P.S; if (S.idx + 1 < S.order.length) pupilGo(S.idx + 1); else pupilAskSubmit(); };
   $('g-flag').onclick = pupilFlag;
+  $('g-speak').onclick = speakQuestion;
   $('g-submit').onclick = pupilAskSubmit;
   zoomable($('g-img'));
   var inp = $('g-input');
