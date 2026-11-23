@@ -41,19 +41,26 @@
  *
  * Od 1.13: žiaci z hárka Čas majú aj úpravu pre dyslexiu: väčšie písmo a riadkovanie a tlačidlo na prečítanie otázky (pupilLogin vráti dys: 1).
  * Meno „Učiteľ“ v hárku Čas zapne úpravu aj pre prihlásenie učiteľa (na vyskúšanie), čas sa učiteľovi nepridáva.
+ *
+ * Od 1.14: archív. Uzavretá (alebo nespustená) písomka sa dá archivovať: jej hárok „Res_…“ sa presunie do spoločného hárka „Archív“
+ * (jeden riadok = jeden riadok výsledkov, celý riadok v stĺpci „riadok (dáta)“) a zmaže sa. V hárku Testy ostane so stavom „archivovaný“.
+ * Obnoviť ju vráti späť (hárok výsledkov aj poznámky), Vymazať (len archivovanú) ju zmaže natrvalo: riadky v Archíve, v hárku Testy
+ * aj v _balíky. PDF na Disku ostávajú. Písomku jedného žiaka (tExportPupil) uloží do PDF aj samostatne, rovnomenný súbor sa nahradí.
  */
-const VERSION = '1.13';
+const VERSION = '1.14';
 const APP_URL = 'https://samocief.github.io/test/';
 const APP_NAME = 'Písomky';
 
-const SH = { questions: ['Otázky', 'Otazky', 'Questions'], pupils: ['Žiaci', 'Ziaci', 'Pupils', 'Students'], extra: ['Čas', 'Cas', 'Time'], tests: 'Testy', packs: '_balíky' };
+const SH = { questions: ['Otázky', 'Otazky', 'Questions'], pupils: ['Žiaci', 'Ziaci', 'Pupils', 'Students'], extra: ['Čas', 'Cas', 'Time'], tests: 'Testy', packs: '_balíky', archive: 'Archív' };
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 const Q_HEAD = ['Test', 'Skupina', 'Otázka', 'A', 'B', 'C', 'D', 'E', 'F', 'Správna', 'Obrázok', 'Aktívna'];
 const EXTRA_HEAD = ['Meno', 'Čas'];   // hárok má nenápadný názov, aby žiaci pri pohľade na tabuľku nič nepostrehli
 const EXTRA_PCT = 0.5;               // žiak z hárka Čas bez vlastnej hodnoty: +50 % celkového času testu
 const PUPIL_HEAD = ['Trieda', 'Rad', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'B'];   // nový hárok Žiaci: zasadací poriadok
 const TEST_HEAD = ['id testu', 'vytvorený', 'trieda', 'test z banky', 'názov', 'stav', 'celkový čas (min)', 'počet otázok', 'skupiny',
-  'miešať možnosti', 'žiak po uzavretí uvidí', 'otázky A', 'otázky B', 'uzavretý o', 'šachovnica', 'spustený'];
+  'miešať možnosti', 'žiak po uzavretí uvidí', 'otázky A', 'otázky B', 'uzavretý o', 'šachovnica', 'spustený', 'archivovaný'];
+// Hárok Archív: písomka | č. (0 = hlavička hárka výsledkov) | čitateľné stĺpce | celý riadok ako JSON (na obnovenie)
+const ARCH_HEAD = ['písomka', 'č.', 'odoslané', 'žiak', 'skupina', 'výsledok (%)', 'body', 'riadok (dáta)'];
 const NAME_MAX = 40;                              // najdlhší názov písomky (= id testu)
 const NAME_RE = /^[A-Za-z0-9_-]+$/;              // povolené znaky názvu: bez diakritiky, medzier a bodiek (kvôli URL, hárkom a priečinkom)
 const RES_FIXED = ['odoslané', 'žiak', 'skupina', 'výsledok (%)', 'body'];
@@ -62,12 +69,14 @@ const LEAVE_PENALTY = 0.10;    // strhnutie z celkového výsledku, keď učite�
 const REVIEW_MIN = 15;         // koľko minút po uzavretí testu žiak vidí svoje výsledky; potom sa už nezobrazia (ani po znovuotvorení odkazu)
 const ADD_MIN = 2;              // koľko minút pridá jedno ťuknutie na „+2 min“ v prehľade učiteľa
 const GRACE_MS = 120000;       // po uplynutí času sa odovzdanie ešte prijme bez príznaku (pomalá sieť)
-const STATE = { ready: 'pripravený', open: 'otvorený', closed: 'uzavretý' };
+const STATE = { ready: 'pripravený', open: 'otvorený', closed: 'uzavretý', archived: 'archivovaný' };
 const REVEAL = { all: 'odpovede', pct: 'len výsledok' };
 const TEACHER = 'Učiteľ';                        // jedno meno navyše v každej triede, nepočíta sa do priemeru
 const ABSENT = 'neprítomný';
 const TEXT_MAX = 100;                            // najdlhšia odpoveď na dopísanie (znaky)
 const DOZOR_OK = { tTest: 1, tSetTest: 1, tUnlock: 1, tAbsent: 1, tReturn: 1, tAddTime: 1 };   // čo smie odkaz pre dozor (len jeden test)
+// archivovaná písomka nemá hárok výsledkov: tieto požiadavky sa odmietnu, kým ju učiteľ neobnoví
+const ARCH_BLOCK = { tTest: 1, tSetTest: 1, tUnlock: 1, tAbsent: 1, tReturn: 1, tAddTime: 1, tFixKey: 1, tTextAns: 1, tExportPupil: 1 };
 const WHY = { none: 'bez odpovede', ended: 'ukončené' };
 const CHUNK = 40000;
 
@@ -339,7 +348,8 @@ function out_(obj) { return ContentService.createTextOutput(JSON.stringify(obj))
 const ROUTES = {
   ping: function () { return { ok: true, v: VERSION }; },
   pupilInit: pupilInit_, pupilLogin: pupilLogin_, pupilBegin: pupilBegin_, pupilSave: pupilSave_, pupilEvent: pupilEvent_, pupilAway: pupilAway_, pupilSubmit: pupilSubmit_, pupilState: pupilState_, pupilResult: pupilResult_,
-  tInit: tInit_, tCreateTest: tCreateTest_, tTest: tTest_, tSetTest: tSetTest_, tUnlock: tUnlock_, tReturn: tReturn_, tAddTime: tAddTime_, tAbsent: tAbsent_, tFixKey: tFixKey_, tTextAns: tTextAns_, tExportPupil: tExportPupil_
+  tInit: tInit_, tCreateTest: tCreateTest_, tTest: tTest_, tSetTest: tSetTest_, tUnlock: tUnlock_, tReturn: tReturn_, tAddTime: tAddTime_, tAbsent: tAbsent_, tFixKey: tFixKey_, tTextAns: tTextAns_, tExportPupil: tExportPupil_,
+  tArchive: tArchive_, tRestore: tRestore_, tDeleteTest: tDeleteTest_
 };
 function handle_(req) {
   try {
@@ -347,6 +357,7 @@ function handle_(req) {
     if (!fn) return { error: 'bad_request', msg: String(req && req.a) };
     if (req.t) { const al = aliases_()[String(req.t)]; if (al) { req.tOld = String(req.t); req.t = al; } }   // staré odkazy a QR kódy
     if (/^t[A-Z]/.test(req.a)) { if (req.dk && !req.k) dozorAuth_(req); else auth_(req); }
+    if (ARCH_BLOCK[req.a] && req.t) { const x = testCached_(String(req.t)); if (x && x.arch) fail_('archived'); }
     return fn(req) || { ok: true };
   } catch (err) {
     const m = String(err && err.message || err);
@@ -393,15 +404,26 @@ function addAnswerNotes() {
   if (!m) { ui.alert('Najprv otvor hárok výsledkov (Res_…).'); return; }
   const f = findTest_(aliases_()[m[1]] || m[1]);
   if (!f) { ui.alert('Test ' + m[1] + ' sa v hárku Testy nenašiel.'); return; }
-  const test = f.test, pack = loadPack_(test.id), tb = tableOf_(sh), first = tb.need('body') + 1;
-  sh.getRange(1, first + 1, 1, test.keys.length).setNotes([test.keys.map(function (k) { return headNote_(pack.q[k]); })]);
+  const n = fillNotes_(sh, f.test, loadPack_(f.test.id));
+  ui.alert('Poznámky doplnené pri ' + n + ' žiakoch. Ukážu sa po prejdení myšou na bunku.');
+}
+// Poznámky s celým znením otázok (hlavička) a odpovedí (bunky žiakov) v hárku výsledkov. Vráti počet žiakov.
+function fillNotes_(sh, test, pack) {
+  const tb = tableOf_(sh), first = tb.need('body') + 1, nq = Math.min(test.keys.length, Math.max(0, tb.head.length - first));
+  if (!nq) return 0;
+  const keys = test.keys.slice(0, nq);
+  sh.getRange(1, first + 1, 1, nq).setNotes([keys.map(function (k) { return headNote_(pack.q[k]); })]);
+  const res = readResults_(test);
+  if (!res.length) return 0;
+  const notes = sh.getRange(2, first + 1, sh.getLastRow() - 1, nq).getNotes();
   let n = 0;
-  readResults_(test).forEach(function (r) {
+  res.forEach(function (r) {
     if (r.absent) return;
-    sh.getRange(r.row, first + 1, 1, test.keys.length).setNotes([test.keys.map(function (k) { return r.keys.indexOf(k) < 0 ? '' : noteFor_(pack.q[k], r.ans[k]); })]);
+    notes[r.row - 2] = keys.map(function (k) { return r.keys.indexOf(k) < 0 ? '' : noteFor_(pack.q[k], r.ans[k]); });
     n++;
   });
-  ui.alert('Poznámky doplnené pri ' + n + ' žiakoch. Ukážu sa po prejdení myšou na bunku.');
+  sh.getRange(2, first + 1, notes.length, nq).setNotes(notes);
+  return n;
 }
 // Jednorazovo po výmene skriptu: v editore vybrať povolitDisk a Spustiť, potvrdiť povolenia (Disk, internet).
 // Webová aplikácia sama o povolenie nepožiada, bez neho ukladanie písomiek na Disk zlyhá.
@@ -608,7 +630,9 @@ function testObj_(t, row) {
   const keysA = list(g('otazky a')), keysB = list(g('otazky b'));
   return {
     id: s_(g('id testu')), created: s_(g('vytvoreny')), started: s_(g('spusteny')), cls: s_(g('trieda')), bank: s_(g('test z banky')), title: s_(g('nazov')),
-    state: st === normName(STATE.closed) ? 'closed' : st === normName(STATE.ready) ? 'ready' : 'open',
+    // archivovaná písomka sa pre žiakov správa ako uzavretá (arch = 1)
+    state: st === normName(STATE.closed) || st === normName(STATE.archived) ? 'closed' : st === normName(STATE.ready) ? 'ready' : 'open', arch: st === normName(STATE.archived) ? 1 : 0,
+    archived: s_(g('archivovany')),
     total: Math.max(1, num_(g('celkovy cas')) || 10), groups: keysB.length > 0, alt: keysB.length > 0 && normName(g('sachovnica')) === 'ano',
     shuffle: yes_(g('miesat')), reveal: normName(g('ziak po')) === normName(REVEAL.pct) ? 'pct' : 'all',
     keysA: keysA, keysB: keysB, keys: uniq_(keysA.concat(keysB)),
@@ -1349,7 +1373,7 @@ function tExportPupil_(req) {
   const old = folder.getFilesByName(name); while (old.hasNext()) old.next().setTrashed(true);
   const pdf = Utilities.newBlob(pupilSheetHtml_(test, pack, r), 'text/html', name).getAs('application/pdf').setName(name);
   const file = folder.createFile(pdf);
-  return { url: file.getUrl(), folderUrl: folder.getUrl() };
+  return { url: file.getUrl(), folderUrl: folder.getUrl(), name: name };
 }
 
 /* ---------- učiteľ (s kľúčom) a dozor (s kľúčom jedného testu) ---------- */
@@ -1361,7 +1385,8 @@ function tInit_() {
   pupils.filter(function (p) { return p.active; }).forEach(function (p) { (classes[p.cls] = classes[p.cls] || []).push(p.label); });
   const t = testsTable_();
   const tests = t.rows.map(function (r) { return testObj_(t, r); }).filter(function (x) { return x.id; })
-    .map(function (x) { return { id: x.id, created: x.created, started: x.started, cls: x.cls, bank: x.bank, title: x.title, n: (x.groups ? x.keysA : x.keys).length, groups: x.groups, alt: x.alt, total: x.total, state: x.state }; });
+    .map(function (x) { return { id: x.id, created: x.created, started: x.started, cls: x.cls, bank: x.bank, title: x.title, n: (x.groups ? x.keysA : x.keys).length, groups: x.groups, alt: x.alt, total: x.total,
+      state: x.arch ? 'archived' : x.state, archived: x.arch ? x.archived.slice(0, 16) : '' }; });
   return { v: VERSION, classes: classes, groups: classGroups_(pupils), penalty: LEAVE_PENALTY, tests: tests, taken: takenNames_(t), nameMax: NAME_MAX,
     bank: readBank_(), sheetUrl: ss_().getUrl(), sheetName: ss_().getName() };
 }
@@ -1582,4 +1607,134 @@ function tAbsent_(req) {
     saveLogins_(test.id, L);
   });
   return { ok: true };
+}
+
+/* ---------- archív: hárok výsledkov sa presunie do spoločného hárka Archív a späť ---------- */
+// Hárok Archív (na konci tabuľky). Stĺpce: písomka | č. | odoslané | žiak | skupina | výsledok (%) | body | riadok (dáta).
+// Riadok č. 0 = hlavička hárka výsledkov, ostatné = riadky výsledkov v pôvodnom poradí. Stĺpec „riadok (dáta)“ sa nemá meniť.
+function archSheet_() {
+  const had = !!ss_().getSheetByName(SH.archive), sh = ensureSheet_(SH.archive, ARCH_HEAD);
+  if (!had) {
+    sh.getRange(1, ARCH_HEAD.length).setNote('Celý riadok hárka výsledkov, podľa neho aplikácia písomku obnoví. Neupravovať.');
+    sh.setFrozenColumns(1); sh.setColumnWidth(ARCH_HEAD.length, 160);
+  }
+  return sh;
+}
+// Riadky hárka sh, ktorých prvý stĺpec je id (čísla riadkov od 2), a ich hodnoty.
+function rowsOf_(sh, id, width) {
+  const out = { idx: [], vals: [] };
+  if (!sh || sh.getLastRow() < 2) return out;
+  sh.getRange(2, 1, sh.getLastRow() - 1, width || sh.getLastColumn()).getValues().forEach(function (r, i) { if (s_(r[0]) === id) { out.idx.push(i + 2); out.vals.push(r); } });
+  return out;
+}
+// Zmaže riadky (čísla riadkov), súvislé úseky naraz, odspodu.
+function deleteRows_(sh, idx) {
+  const a = idx.slice().sort(function (x, y) { return y - x; });
+  for (let i = 0; i < a.length;) {
+    let j = i; while (j + 1 < a.length && a[j + 1] === a[j] - 1) j++;
+    sh.deleteRows(a[j], j - i + 1); i = j + 1;
+  }
+}
+function setTestCells_(f, vals) {
+  Object.keys(vals).forEach(function (p) { const i = f.t.col(p); if (i >= 0) f.t.sheet.getRange(f.rowIndex, i + 1).setNumberFormat('@').setValue(vals[p]); });
+}
+function tArchive_(req) {
+  const id = String(req.t || '');
+  return withLock_(function () {
+    const f = findTest_(id);
+    if (!f) fail_('no_test');
+    if (f.test.arch) return { ok: true, already: true };
+    if (f.test.state === 'open') fail_('arch_open');
+    const sh = resultsGet_(id), rows = [];
+    if (sh && sh.getLastRow() > 0 && sh.getLastColumn() > 0) {
+      const rng = sh.getDataRange(), vals = rng.getValues(), disp = rng.getDisplayValues();
+      const head = vals[0].map(function (h) { return normName(h); });
+      const c = function (p) { const n = normName(p); for (let i = 0; i < head.length; i++) if (head[i] && head[i].indexOf(n) === 0) return i; return -1; };
+      const cS = c('odoslane'), cN = c('ziak'), cG = c('skupina'), cR = c('vysledok'), cB = c('body');
+      const json = function (a) { const j = JSON.stringify(a); if (j.length > 49000) fail_('arch_big'); return j; };
+      rows.push([id, 0, '', '(hlavička hárka)', '', '', '', json(vals[0])]);
+      for (let i = 1; i < vals.length; i++) {
+        // dátum (čas odovzdania) ako text tak, ako ho ukazuje tabuľka; pri obnovení ho tabuľka znova prečíta ako dátum
+        const row = vals[i].map(function (v, j) { return Object.prototype.toString.call(v) === '[object Date]' ? disp[i][j] : v; });
+        if (row.every(function (v) { return v === ''; })) continue;
+        const pick = function (ci, d) { return ci < 0 ? '' : d ? disp[i][ci] : row[ci]; };
+        rows.push([id, i, pick(cS, true), pick(cN), pick(cG), pick(cR), pick(cB, true), json(row)]);
+      }
+    }
+    if (rows.length) {
+      const ar = archSheet_(), start = ar.getLastRow() + 1;
+      if (ar.getMaxRows() < start + rows.length - 1) ar.insertRowsAfter(ar.getMaxRows(), start + rows.length - 1 - ar.getMaxRows());
+      const fmt = ['@', '0', '@', '@', '@', '0%', '@', '@'];
+      ar.getRange(start, 1, rows.length, ARCH_HEAD.length).setNumberFormats(rows.map(function () { return fmt; })).setValues(rows);
+    }
+    if (sh) ss_().deleteSheet(sh);
+    // stav pred archivovaním: nespustená písomka sa po obnovení vráti ako pripravená, ostatné ako uzavreté
+    setTestCells_(f, { stav: STATE.archived, archivovany: now_('yyyy-MM-dd HH:mm') + (f.test.state === 'ready' ? ' (bol pripravený)' : '') });
+    forgetTest_(id);
+    return { ok: true, rows: Math.max(0, rows.length - 1) };
+  });
+}
+function tRestore_(req) {
+  const id = String(req.t || '');
+  return withLock_(function () {
+    const f = findTest_(id);
+    if (!f) fail_('no_test');
+    if (!f.test.arch) return { ok: true, already: true };
+    if (resultsGet_(id)) fail_('res_exists', resultsName_(id));
+    const test = f.test, pack = loadPack_(id), ar = ss_().getSheetByName(SH.archive);
+    const got = rowsOf_(ar, id, ARCH_HEAD.length), list = got.vals.map(function (r) { return { n: num_(r[1]) || 0, d: String(r[ARCH_HEAD.length - 1] || '') }; })
+      .sort(function (a, b) { return a.n - b.n; });
+    let head = null; try { head = list.length && list[0].n === 0 ? JSON.parse(list[0].d) : null; } catch (e) { head = null; }
+    let sh, n = 0;
+    if (!head) sh = createResultsSheet_(test, pack);   // písomka bez hárka výsledkov (napr. nikdy nespustená)
+    else {
+      sh = ss_().insertSheet(resultsName_(id), afterTests_());
+      const w = head.length, data = list.filter(function (x) { return x.n > 0; }).map(function (x) {
+        let r = []; try { r = JSON.parse(x.d) || []; } catch (e) { r = []; }
+        r = r.slice(0, w); while (r.length < w) r.push('');
+        return r;
+      });
+      n = data.length;
+      const rowsNeed = Math.max(501, data.length + 1);
+      if (sh.getMaxColumns() < w) sh.insertColumnsAfter(sh.getMaxColumns(), w - sh.getMaxColumns());
+      if (sh.getMaxRows() < rowsNeed) sh.insertRowsAfter(sh.getMaxRows(), rowsNeed - sh.getMaxRows());
+      sh.getRange(1, 1, 1, w).setValues([head]).setFontWeight('bold').setBackground('#d9d9d9').setWrap(true);
+      sh.setFrozenRows(1); sh.setFrozenColumns(Math.min(2, w));
+      const tb = tableOf_(sh), cR = tb.col('vysledok'), cB = tb.col('body');
+      if (cR >= 0) sh.getRange(2, cR + 1, rowsNeed - 1, 1).setNumberFormat('0%');
+      if (cB >= 0) {
+        sh.getRange(2, cB + 1, rowsNeed - 1, 1).setNumberFormat('@');
+        const nq = Math.min(test.keys.length, w - cB - 1);
+        if (nq > 0) sh.getRange(2, cB + 2, rowsNeed - 1, nq).setHorizontalAlignment('center');
+      }
+      if (data.length) sh.getRange(2, 1, data.length, w).setValues(data);
+      if (cB >= 0) try { fillNotes_(sh, test, pack); } catch (e) { /* poznámky nie sú dôležité */ }
+    }
+    if (got.idx.length) deleteRows_(ar, got.idx);
+    setTestCells_(f, { stav: /pripraven/.test(test.archived) ? STATE.ready : STATE.closed, archivovany: '' });
+    forgetTest_(id);
+    try { organizeResults_(); } catch (e) { /* poradie hárkov nie je dôležité */ }
+    return { ok: true, rows: n, state: /pripraven/.test(test.archived) ? 'ready' : 'closed' };
+  });
+}
+// Natrvalo: len archivovaná písomka. Zmažú sa jej riadky v Archíve, v hárku Testy a v _balíky, prihlásenia a prezývky (staré id).
+// Priečinok s PDF na Disku ostáva.
+function tDeleteTest_(req) {
+  const id = String(req.t || '');
+  return withLock_(function () {
+    const f = findTest_(id);
+    if (!f) return { ok: true, already: true };
+    if (!f.test.arch) fail_('not_archived');
+    const ar = ss_().getSheetByName(SH.archive), pk = ss_().getSheetByName(SH.packs);
+    const a = rowsOf_(ar, id, 1); if (a.idx.length) deleteRows_(ar, a.idx);
+    const p = rowsOf_(pk, id, 1); if (p.idx.length) deleteRows_(pk, p.idx);
+    f.t.sheet.deleteRow(f.rowIndex);
+    props_().deleteProperty('L1_' + id); props_().deleteProperty('S1_' + id);
+    const al = aliases_(); let ch = false;
+    Object.keys(al).forEach(function (o) { if (al[o] === id) { delete al[o]; ch = true; } });
+    if (ch) setOwnProp_('ALIAS', JSON.stringify(al));
+    forgetTest_(id);
+    try { cache_().remove('Q1_' + id + '_n'); } catch (e) { /* nevadí */ }
+    return { ok: true };
+  });
 }

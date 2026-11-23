@@ -161,6 +161,10 @@ td.act button+button{margin-left:4px}
 .badge{display:inline-block;font-size:.8rem;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:2px 10px;color:var(--muted);vertical-align:middle;white-space:nowrap}
 .badge.open{color:var(--ok);border-color:var(--ok)}
 .badge.warn{color:var(--warn);border-color:var(--warn)}
+.badge.arch{border-style:dashed}
+tr.arch td{color:var(--muted)}
+tr.arch td b{font-weight:600}
+button.mini.danger{color:var(--warn);border-color:var(--warn)}
 .qr{width:150px;flex:0 0 auto;background:#fff;border-radius:8px;padding:4px}
 .qr svg{display:block;width:100%;height:auto}
 .qrbig{background:#fff;border-radius:16px;padding:20px;display:flex;flex-direction:column;align-items:center;gap:12px;color:#18262a;max-width:min(92vw,620px);cursor:default}

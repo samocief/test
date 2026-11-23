@@ -3,7 +3,7 @@
  * môže ju spustiť a uzavrieť, vracať zamknutých žiakov do testu, označiť neprítomných a skopírovať výsledky. Jeho odkaz sa nikam neukladá.
  */
 var T = { s: '', k: '', dz: false, dk: '', init: null, oldScript: false, listOpen: false, printOpen: false, cur: null, poll: null, tab: 'new', sub: 'over', showRes: false, qsForce: false };
-var FORM_KEY = 'form', NEED_SCRIPT = '1.13';
+var FORM_KEY = 'form', NEED_SCRIPT = '1.14';
 // Názov písomky je zároveň jej id (odkaz, QR, hárok výsledkov, priečinok s PDF): bez diakritiky, medzier a bodiek, unikátny bez ohľadu na veľké písmená.
 var NAME_RE = /^[A-Za-z0-9_-]+$/, NAME_MAX = 40;
 
@@ -349,23 +349,59 @@ function tPaper() {
 }
 
 /* ---------- zoznam písomiek ---------- */
-function stateBadge(state) { return el('span', { class: 'badge' + (state === 'open' ? ' open' : ''), text: t('state.' + state) }); }
+function stateBadge(state) { return el('span', { class: 'badge' + (state === 'open' ? ' open' : state === 'archived' ? ' arch' : ''), text: t('state.' + state) }); }
 async function tTests() {
   var box = $('tests-list');
   box.innerHTML = ''; box.appendChild(el('p', { class: 'muted' }, [el('span', { class: 'spin' }), t('common.loading')]));
   try { var init = await apiRetry('tInit', A(), 2); T.init.tests = init.tests; if (init.taken) T.init.taken = init.taken; T.init.classes = init.classes; T.init.groups = init.groups; T.init.bank = init.bank; } catch (e) { /* ukážeme, čo máme */ }
+  tTestsList();
+}
+// Zoznam písomiek: uzavretú alebo nespustenú možno archivovať (hárok výsledkov ide do hárka Archív), archivovanú obnoviť alebo vymazať.
+function tTestsList() {
+  var box = $('tests-list');
   box.innerHTML = '';
   var rows = T.init.tests.slice().reverse();
   if (!rows.length) { box.appendChild(el('p', { class: 'muted', text: t('t.no_tests') })); return; }
   var tb = el('tbody');
   rows.forEach(function (x) {
-    tb.appendChild(el('tr', {}, [
-      el('td', {}, [el('b', { text: x.title || x.id }), el('br'), el('span', { class: 'small muted', text: whenText(x) })]),
+    var arch = x.state === 'archived', mini = function (key, fn, cls) { return el('button', { type: 'button', class: 'mini' + (cls ? ' ' + cls : ''), text: t(key), onclick: function () { fn(x, this); } }); };
+    var acts = arch ? [mini('t.restore', tRestore), mini('t.delete', tDeleteTest, 'danger')]
+      : [el('button', { type: 'button', class: 'mini', text: t('t.open'), onclick: function () { tOpenTest(x.id); } }), x.state === 'open' ? null : mini('t.archive', tArchive)];
+    var when = whenText(x) + (arch && x.archived ? ' · ' + t('t.when_archived', { when: shortWhen(x.archived) }) : '');
+    tb.appendChild(el('tr', { class: arch ? 'arch' : null }, [
+      el('td', {}, [el('b', { text: x.title || x.id }), el('br'), el('span', { class: 'small muted', text: when })]),
       el('td', { text: x.cls }), el('td', { class: 'num', text: String(x.n) + (x.groups ? ' (A/B)' : '') }),
       el('td', {}, [stateBadge(x.state)]),
-      el('td', {}, [el('button', { type: 'button', class: 'mini', text: t('t.open'), onclick: function () { tOpenTest(x.id); } })])]));
+      el('td', { class: 'act' }, acts)]));
   });
   box.appendChild(el('div', { class: 'tablebox' }, [el('table', {}, [el('thead', {}, [el('tr', {}, [t('t.col_test'), t('t.col_class'), t('t.col_n'), t('t.col_state'), ''].map(function (h, i) { return el('th', { class: i === 2 ? 'num' : '', text: h }); }))]), tb])]));
+}
+function shortWhen(s) { var m = /^(\d{4})-(\d\d)-(\d\d)[ T](\d\d):(\d\d)/.exec(String(s || '')); return m ? (+m[3]) + '.' + (+m[2]) + '. ' + m[4] + ':' + m[5] : String(s || ''); }
+async function tArchive(x, btn) {
+  btn.disabled = true; tStatus('tests-msg', t('t.archiving', { title: x.title || x.id }));
+  try {
+    await api('tArchive', A({ t: x.id }));
+    x.prev = x.state; x.state = 'archived'; x.archived = nowStr();
+    tTestsList(); tStatus('tests-msg', t('t.archived_ok', { title: x.title || x.id }), 'ok');
+  } catch (e) { btn.disabled = false; tStatus('tests-msg', errText(e), 'bad'); }
+}
+async function tRestore(x, btn) {
+  btn.disabled = true; tStatus('tests-msg', t('t.restoring', { title: x.title || x.id }));
+  try {
+    var r = await api('tRestore', A({ t: x.id }));
+    x.state = r.state || x.prev || 'closed'; x.archived = '';
+    tTestsList(); tStatus('tests-msg', t('t.restored_ok', { title: x.title || x.id }), 'ok');
+  } catch (e) { btn.disabled = false; tStatus('tests-msg', errText(e), 'bad'); }
+}
+async function tDeleteTest(x, btn) {
+  if (!confirm(t('t.delete_confirm', { title: x.title || x.id }))) return;
+  btn.disabled = true; tStatus('tests-msg', t('t.deleting', { title: x.title || x.id }));
+  try {
+    await api('tDeleteTest', A({ t: x.id }));
+    T.init.tests = T.init.tests.filter(function (y) { return y.id !== x.id; });
+    if (T.init.taken) T.init.taken = T.init.taken.filter(function (k) { return k !== String(x.id).toLowerCase(); });
+    tTestsList(); tStatus('tests-msg', t('t.deleted_ok', { title: x.title || x.id }), 'ok');
+  } catch (e) { btn.disabled = false; tStatus('tests-msg', errText(e), 'bad'); }
 }
 
 /* ---------- jedna písomka ---------- */
@@ -504,6 +540,8 @@ function tOverview() {
         onclick: function () { if (again && !confirm(t('t.add_again_confirm', { name: p.label, n: d.addMin || 2 }))) return; tAddTime(p.id, this); } })].concat(btn);
     }
     else if (!r && !p.teacher) btn = el('button', { type: 'button', class: 'mini', text: ab ? t('t.unmark_absent') : t('t.mark_absent'), onclick: function () { tAbsent(p, !ab, this); } });
+    // písomka jedného žiaka ako PDF na Disk (napr. na rozhovor s rodičom); rovnomenný súbor sa nahradí
+    if (r && !T.dz) btn = [].concat(btn, [el('button', { type: 'button', class: 'mini', text: t('t.pdf'), title: t('t.pdf_hint'), onclick: function () { tExportOne(r, p.label, this); } })]);
     list.push({ p: p, r: r, st: st, cls: cls, flags: flags, btn: btn, wait: wait });
   });
   // stĺpec Príznak len vtedy, keď nejaký príznak je (na telefóne by inak tabuľka nevošla)
@@ -595,6 +633,16 @@ async function tExportAll() {
       folder = (await apiRetry('tExportPupil', A({ t: T.cur.id, row: rs[i].row }), 3)).folderUrl;
     }
     $('over-msg').innerHTML = esc(t('t.export_done', { n: rs.length })) + ' <a target="_blank" rel="noopener" href="' + esc(folder) + '">' + esc(t('t.open_folder')) + '</a>';
+    $('over-msg').className = 'small ok'; $('over-msg').hidden = false;
+  } catch (e) { tStatus('over-msg', t('t.export_failed', { msg: errText(e) }), 'bad'); }
+  btn.disabled = false;
+}
+
+async function tExportOne(r, label, btn) {
+  btn.disabled = true; tStatus('over-msg', t('t.export_one', { name: label }));
+  try {
+    var s = await apiRetry('tExportPupil', A({ t: T.cur.id, row: r.row }), 3);
+    $('over-msg').innerHTML = esc(t('t.export_one_done')) + ' <a target="_blank" rel="noopener" href="' + esc(s.url) + '">' + esc(s.name || label) + '</a> · <a target="_blank" rel="noopener" href="' + esc(s.folderUrl) + '">' + esc(t('t.open_folder')) + '</a>';
     $('over-msg').className = 'small ok'; $('over-msg').hidden = false;
   } catch (e) { tStatus('over-msg', t('t.export_failed', { msg: errText(e) }), 'bad'); }
   btn.disabled = false;

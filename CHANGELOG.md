@@ -1,5 +1,19 @@
 # Zmeny
 
+## 1.14 (2026-11-23) – treba vymeniť skript tabuľky
+
+- **Archív.** V zozname písomiek je pri uzavretej (aj nespustenej) písomke tlačidlo **Archivovať**. Hárok výsledkov `Res_<názov>` sa presunie
+  do jedného spoločného hárka **Archív** (na konci tabuľky) a zmaže sa. Písomka ostane v zozname so stavom **Archivovaný** a dátumom.
+  - Hárok Archív: písomka | č. | odoslané | žiak | skupina | výsledok (%) | body | riadok (dáta). Dá sa v ňom filtrovať podľa písomky;
+    posledný stĺpec je celý pôvodný riadok, podľa ktorého sa písomka obnoví – ten neupravuj.
+  - **Obnoviť** vráti hárok výsledkov späť (aj s poznámkami s odpoveďami) a riadky z Archívu odstráni. Písomka je potom uzavretá
+    (nespustená ostane nespustená).
+  - **Vymazať** je len pri archivovanej písomke, s potvrdením: zmaže ju natrvalo (Archív, hárok Testy, _balíky). PDF na Disku ostávajú.
+    Názov sa tým uvoľní pre novú písomku.
+  - Otvorenú písomku archivovať nemožno. Odkaz a QR kód archivovanej písomky žiakom ukážu, že test je uzavretý.
+- **PDF jedného žiaka.** V prehľade písomky je pri každom, kto odovzdal, tlačidlo **PDF**: uloží jeho písomku do priečinka písomky na Disku
+  (rovnaký ako pri „Uložiť písomky na Disk“) a ukáže odkaz na súbor. Ak súbor už existuje, nahradí sa. Dozor tlačidlo nemá.
+
 ## 1.13 (2026-11-20) – treba vymeniť skript tabuľky
 
 - **Úprava pre dyslexiu pre žiakov z hárka Čas** (okrem viac času, ten sa nemení – predvolene +50 %, alebo hodnota v stĺpci Čas):

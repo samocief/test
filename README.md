@@ -17,6 +17,7 @@ Ak písomka nestačí na čas, učiteľ v prehľade pridá žiakovi (alebo všet
 | **Žiaci** | učiteľ | zasadací poriadok skopírovaný z Excelu: Trieda, Rad, A, B, A, B … (alebo zoznam: Trieda, Meno, Skupina, Aktívny) |
 | **Čas** | učiteľ | Meno, Čas: žiaci, ktorí majú na písomku viac času (prázdny Čas = +50 %, inak napr. `25 %` alebo `5 min`) |
 | Testy, Res_…, _balíky | skript | spustené písomky, výsledky (písmeno alebo napísaná odpoveď, ✓ / ✗ / ? na kontrolu), snímka otázok |
+| Archív | skript | výsledky archivovaných písomiek (jeden hárok pre všetky) |
 
 - **Názov písomky** (od verzie 1.12) je zároveň jej id: odkaz a QR kód, hárok výsledkov `Res_<názov>` aj priečinok s PDF na Disku.
   Len písmená bez diakritiky, číslice, `-` a `_`, najviac 40 znakov, unikátny bez ohľadu na veľké písmená. Predvyplní sa podľa testu;
@@ -28,6 +29,8 @@ Ak písomka nestačí na čas, učiteľ v prehľade pridá žiakovi (alebo všet
 - **Zasadací poriadok v hárku Žiaci** (od verzie skriptu 1.7): celú tabuľku zasadacieho poriadku stačí skopírovať zo svojho Excelu do hárka Žiaci. Hlavička: `Trieda | Rad | A | B | A | B | …`. Každá bunka pod písmenom je jedno miesto, skupina žiaka je písmeno v hlavičke jeho stĺpca, prázdna bunka je prázdne miesto. Riadok bez triedy patrí k triede nad ním, zopakovaná hlavička sa preskočí, trieda „7A“ je to isté ako „7.A“. Skupiny teda idú po stĺpcoch: vedľa seba sedia rôzne skupiny, za sebou tá istá. Prepínač **Šachovnica** pri novom teste skupiny v každom druhom rade prehodí (podľa stĺpca Rad), takže inú skupinu má aj sused vpredu a vzadu. Hlavička môže mať aj ďalšie písmená (A/B/C), testy však zatiaľ majú len dve sady (A a B), žiaci ďalších skupín píšu A. Starší tvar hárka (Trieda | Meno | Skupina | Aktívny) funguje ďalej.
 - **Viac času** (od verzie skriptu 1.9): do hárka Čas (vytvorí sa sám) skopíruj mená žiakov ako v hárku Žiaci, poradie mena a priezviska ani diakritika nevadí. Dostanú o 50 % viac (zaokrúhlené nahor na celé minúty), inú hodnotu napíš do stĺpca Čas. Čas sa žiakovi zafixuje, keď ťukne na Začať. Vidí ho len žiak sám, v prehľade učiteľa ani vo výsledkoch sa nezobrazuje.
 - **Úprava pre dyslexiu** (od verzie skriptu 1.13): žiaci z hárka Čas majú v teste väčšie písmo a riadkovanie a tlačidlo s reproduktorom, ktoré prečíta otázku aj možnosti (hlasom telefónu, so slúchadlami). Meno „Učiteľ“ v hárku Čas zapne úpravu pre prihlásenie Učiteľ (na vyskúšanie).
+- **Archív** (od verzie skriptu 1.14): v zozname písomiek **Archivovať** presunie výsledky uzavretej písomky do hárka Archív a hárok `Res_…` zmaže; **Obnoviť** ich vráti späť, **Vymazať** (len archivovaná) písomku zmaže natrvalo. PDF na Disku ostávajú.
+- **PDF jedného žiaka:** tlačidlo PDF pri žiakovi v prehľade (napr. na rozhovor s rodičom), súbor s rovnakým menom sa nahradí.
 - **Tlačiť / PDF:** v Novej písomke po výbere testu. Test na papier (skupiny na samostatných stranách), voliteľne väčšie písmo a riadkovanie pre dyslexiu a kľúč so správnymi odpoveďami. PDF cez „Uložiť ako PDF“ v okne tlače.
 - Poradie otázok sa mieša vždy, poradie možností voliteľne (predvolene áno).
 - Správne odpovede neodchádzajú do prehliadača žiaka. Opravuje skript tabuľky.
