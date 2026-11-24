@@ -1,5 +1,5 @@
 /* Písomky: spoločné pomôcky (texty v jazykoch, spojenie so skriptom tabuľky, drobnosti pre stránku). */
-var APP = { version: '1.14' };
+var APP = { version: '1.15' };
 
 /* ---------- stránka ---------- */
 function $(id) { return document.getElementById(id); }
@@ -224,8 +224,10 @@ function numFmt(x) {
 // Body na zobrazenie: 7,35 alebo 8.
 function ptsFmt(p) { return String(Math.round((p || 0) * 100) / 100).replace('.', ','); }
 // Body za jednu odpoveď: správna 1, nesprávna, na kontrolu alebo bez odpovede 0, číselná podľa odchýlky.
+// Anulovaná otázka s plným bodom (void = 'full') dá 1 každému; anulovaná bez započítania (void = 'skip') sa do bodov nepočíta (voidSkip).
 function ansPts(q, a) {
   if (!q) return 0;
+  if (q.void === 'full') return 1;
   if (q.num) return typeof a === 'string' ? numPts(q, a) : 0;
   return gradeAns(q, a) === 'ok' ? 1 : 0;
 }
@@ -241,6 +243,7 @@ function gradeAns(q, a) {
   if (typeof a !== 'number') return 'none';
   return a === q.ok ? 'ok' : 'bad';
 }
+function voidSkip(q) { return !!(q && q.void === 'skip'); }
 
 // Správna číselná odpoveď slovami: „750 000 000 ± 20 % (plné body do ± 5 %)“.
 function numText(q) {

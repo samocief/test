@@ -1,5 +1,38 @@
 # Zmeny
 
+## 1.15 (2026-11-24) – treba vymeniť skript tabuľky
+
+- **Ponuka ⋯ pri každej písomke** (v zozname písomiek aj v prehľade písomky). V riadku zoznamu ostalo jedno tlačidlo: **Otvoriť**,
+  pri archivovanej **Obnoviť**. Všetko ostatné je v ponuke; čo sa práve nedá, je sivé s vysvetlením (napr. „Najprv písomku uzavri“).
+  Ponuka sa ovláda aj klávesnicou (šípky, Esc) a na telefóne sa zmestí na obrazovku. Dozor ponuku nemá.
+- **Premenovať** (nie počas písania): nový názov = nové id. Premenuje sa hárok výsledkov `Res_…`, riadky v `_balíky` a v Archíve
+  a priečinok s PDF na Disku. Starý odkaz, QR kód aj papier pre dozor fungujú ďalej (starý názov ostane obsadený, kým písomku nevymažeš).
+  Dá sa premenovať aj späť alebo zmeniť len veľké a malé písmená.
+- **Duplikovať / náhradný termín**: nová písomka s otázkami pôvodnej (aj s opraveným kľúčom, uznanými a anulovanými otázkami).
+  - **Kto píše:** celá trieda, alebo **len tí, čo pôvodnú nepísali** (neprítomní a neprihlásení; okno ich vypíše). Ostatní sa
+    na náhradný termín neprihlásia a v prehľade sú len títo žiaci. Názov sa predvyplní (`…_N`, pri kópii `…_2`).
+  - **Otázky** (test so skupinami): ako pôvodná, **prehodiť skupiny** (skupina A píše otázky B a naopak), všetci A, všetci B alebo všetci všetko.
+  - Pri kópii sa dá zvoliť iná trieda a čas. V hárku Testy pribudli stĺpce **žiaci** (náhradný termín) a **zdroj** (z ktorej písomky).
+- **Prepočítať body**: po oprave kľúča v hárku Otázky. Aplikácia najprv ukáže, čo sa zmenilo (napr. „A3. … správna B → C“, nové
+  správne odpovede na dopísanie, číslo a odchýlka, znenie), potom prepočíta body, percentá, bunky aj poznámky všetkých žiakov.
+  Otázka sa hľadá podľa znenia, pri zmenenom znení podľa riadku. Otázku s iným počtom možností alebo iným typom vynechá (a povie prečo),
+  lebo odpovede žiakov sú uložené ako poradie možnosti.
+- **Anulovať otázku** (záložka Otázky, tlačidlo Anulovať pri otázke; z ponuky „Anulovať otázku…“): okno sa opýta, či
+  **plný bod pre všetkých**, alebo **nezapočítať** (písomka má o bod menej, napr. 9 z 9). Dá sa zmeniť aj zrušiť. Výsledky sa prepočítajú,
+  v hárku výsledkov je pri otázke `⊘`, žiak vo výsledkoch vidí „anulovaná – …“, v PDF tiež. Štatistika otázky ostáva skutočná.
+- **Kopírovať známky**: okno so žiakmi podľa abecedy, percentami a známkou, nad tým stupnica (predvolene 1 od 90 %, 2 od 75 %, 3 od 50 %,
+  4 od 25 %), dá sa zmeniť a zapamätá sa. Skopíruje sa meno a známka (dva stĺpce bez hlavičky), kto nepísal, má známku prázdnu.
+- **Otvoriť otázky / Otvoriť výsledky v tabuľke**: otvorí hárok Otázky na prvom riadku testu, resp. hárok výsledkov (pri archivovanej Archív na jej riadkoch).
+- **Náhľad ako žiak**: stránka žiaka v novej karte s otázkami písomky (výber skupiny, aj s úpravou pre dyslexiu). Nič sa neukladá,
+  odchod z testu sa nestráži, po odovzdaní sa hneď ukáže vyhodnotenie.
+- **Tlačiť / PDF** z ponuky: otázky spustenej písomky (s opraveným kľúčom), skupina A aj B / len A / len B, dyslexia, kľúč.
+- **Poznámka k písomke** (len pre teba): v zozname pod názvom a v prehľade. Nový stĺpec **poznámka** v hárku Testy.
+- **Výsledky v hárku `Res_…` sú vždy podľa abecedy** (učiteľ na konci; ďalší pokus žiaka hneď pod predošlým). Nový hárok výsledkov má
+  **filter** na celom hárku. Staršie hárky filter nedostanú (pridáš ho sám: Údaje → Vytvoriť filter).
+- **Kopírovať výsledky pre Excel** je tiež vždy podľa abecedy.
+- Uloženie PDF jedného žiaka nájde žiaka podľa mena (riadky sa teraz pri odovzdaní presúvajú).
+- So skriptom 1.14 aplikácia funguje ďalej; akcie, ktoré potrebujú nový skript, sú v ponuke sivé („Potrebuje skript tabuľky 1.15“).
+
 ## 1.14 (2026-11-23) – treba vymeniť skript tabuľky
 
 - **Archív.** V zozname písomiek je pri uzavretej (aj nespustenej) písomke tlačidlo **Archivovať**. Hárok výsledkov `Res_<názov>` sa presunie
