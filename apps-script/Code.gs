@@ -54,7 +54,7 @@
  * (tVoid: v balíku void = 'full' plný bod pre všetkých, 'skip' nezapočíta sa). Poznámka k písomke (tNote, stĺpec „poznámka“).
  * Stupnica známok (tGrades). Výsledky v hárku Res_… sú vždy v abecednom poradí (učiteľ na konci) a nový hárok výsledkov má filter.
  */
-const VERSION = '1.15';
+const VERSION = '1.15.1';
 const APP_URL = 'https://samocief.github.io/test/';
 const APP_NAME = 'Písomky';
 
@@ -1377,8 +1377,8 @@ function pupilSheetHtml_(test, pack, r) {
     'body{font-family:Arial,sans-serif;font-size:11pt;color:#18262a;margin:0}h1{font-size:16pt;margin:0 0 2pt}' +
     '.meta{color:#56666a;font-size:9.5pt;margin-bottom:10pt}.score{font-size:13pt;font-weight:bold;margin:6pt 0 12pt}' +
     '.q{border-top:1px solid #c9d3cd;padding:7pt 0;page-break-inside:avoid}.qt{font-weight:bold;margin-bottom:4pt}' +
-    '.tag{font-weight:normal;font-size:9pt;padding:1pt 5pt;border-radius:3pt;margin-left:6pt}.ok{background:#dcefe2;color:#1d6b38}.bad{background:#f7dede;color:#9c2a2a}.none{background:#eee;color:#56666a}' +
-    '.rev{background:#fbefd0;color:#8a5a00}.o{margin:1.5pt 0 1.5pt 10pt}.o.right{color:#1d6b38;font-weight:bold}.o.wrong{color:#9c2a2a;text-decoration:line-through}' +
+    '.tag{font-weight:normal;font-size:9pt;padding:1pt 5pt;border-radius:3pt;margin-left:6pt}.ok{background:#dcefe2;color:#1d6b38}.bad{background:#f7dede;color:#9c2a2a}.none{background:#eee;color:#56666a}.miss{background:#c62828;color:#fff;font-weight:bold}' +
+    '.rev{background:#fbefd0;color:#8a5a00}.o{margin:1.5pt 0 1.5pt 10pt}.o.right{color:#1d6b38;font-weight:bold}.o.wrong{color:#9c2a2a;text-decoration:line-through}.o.noans{color:#c62828;font-weight:bold}' +
     '.note{color:#56666a;font-size:9pt;margin-top:10pt}img{max-width:300pt;max-height:180pt;margin:3pt 0}</style></head><body>';
   html += '<h1>' + h_(r.name) + '</h1><div class="meta">' + h_([test.title, 'trieda ' + test.cls, r.group ? 'skupina ' + r.group : '', 'odovzdané ' + r.sent].filter(String).join(' · ')) + '</div>';
   html += '<div class="score">Výsledok: ' + Math.round(sc.pct * 100) + ' % (' + ptsFmt(sc.ok) + ' b z ' + sc.n + ')' +
@@ -1386,11 +1386,13 @@ function pupilSheetHtml_(test, pack, r) {
   r.keys.forEach(function (k, i) {
     const q = pack.q[k]; if (!q) return;
     const a = r.ans[k], st = gradeAns(q, a);
-    const tag = { none: '<span class="tag none">bez odpovede</span>', ok: '<span class="tag ok">správne</span>', bad: '<span class="tag bad">nesprávne</span>',
+    const tag = { none: '<span class="tag miss">bez odpovede</span>', ok: '<span class="tag ok">správne</span>', bad: '<span class="tag bad">nesprávne</span>',
       review: '<span class="tag rev">na kontrolu</span>', part: '<span class="tag rev">' + ptsFmt(numPts(q, a)) + ' b</span>' }[st] +
       (q.void ? '<span class="tag none">' + (q.void === 'full' ? 'anulovaná – plný bod' : 'anulovaná – nezapočítava sa') + '</span>' : '');
     const img = q.img ? imgData_(q.img) : '';
     html += '<div class="q"><div class="qt">' + (i + 1) + '. ' + h_(q.q) + tag + '</div>' + (img ? '<img src="' + img + '">' : '');
+    // bez odpovede výrazne červenou, aby sa nezamenilo so správnou odpoveďou (zelená je len kľúč)
+    if (st === 'none') html += '<div class="o noans">✗ Žiak neodpovedal</div>';
     if (q.num) {
       if (st !== 'none') html += '<div class="o ' + (st === 'ok' ? 'right' : st === 'bad' ? 'wrong' : '') + '">Odpoveď žiaka: ' + h_(a) +
         (numParse(a) !== null && numFmt(numParse(a)) !== a ? ' (= ' + h_(numFmt(numParse(a))) + ')' : '') + (st === 'ok' ? ' ✓' : st === 'part' ? ' · ' + ptsFmt(numPts(q, a)) + ' b' : ' ✗') + '</div>';

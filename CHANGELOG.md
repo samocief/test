@@ -1,5 +1,10 @@
 # Zmeny
 
+## 1.15.1 (2026-11-24) – treba vymeniť skript tabuľky
+
+- **PDF žiaka: otázka bez odpovede je červená.** Štítok „bez odpovede“ je červený (predtým sivý) a pod otázkou je
+  červený riadok „✗ Žiak neodpovedal“, aby sa zelene vyznačená správna odpoveď nezamenila s odpoveďou žiaka.
+
 ## 1.15 (2026-11-24) – treba vymeniť skript tabuľky
 
 - **Ponuka ⋯ pri každej písomke** (v zozname písomiek aj v prehľade písomky). V riadku zoznamu ostalo jedno tlačidlo: **Otvoriť**,
