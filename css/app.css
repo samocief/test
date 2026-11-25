@@ -152,7 +152,7 @@ th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);verti
 th{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
 tr:last-child td{border-bottom:0}
 .tablebox td:first-child{white-space:nowrap}
-td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 td.num{font-weight:600}
 tr.sel td{background:var(--bg)}
 tr.wait td{background:var(--warn-bg)}

@@ -1,5 +1,10 @@
 # Zmeny
 
+## 1.15.2 (2026-11-25) – skript netreba meniť
+
+- **Zoznam písomiek: kratší riadok.** Pri kópii / náhradnom termíne sa v zozname už nepíše „z písomky …“ (zdroj ostáva
+  v prehľade písomky a v hárku Testy). Počet otázok „13 (A/B)“ sa už nezalamuje.
+
 ## 1.15.1 (2026-11-24) – treba vymeniť skript tabuľky
 
 - **PDF žiaka: otázka bez odpovede je červená.** Štítok „bez odpovede“ je červený (predtým sivý) a pod otázkou je

@@ -386,7 +386,7 @@ function tTestsList() {
       onclick: function () { menuOpen(this, testItems(x)); } });
     var when = whenText(x) + (arch && x.archived ? ' · ' + t('t.when_archived', { when: shortWhen(x.archived) }) : '');
     tb.appendChild(el('tr', { class: arch ? 'arch' : null }, [
-      el('td', {}, [el('b', { text: x.title || x.id }), el('br'), el('span', { class: 'small muted', text: [when, onlyText(x)].filter(Boolean).join(' · ') }),
+      el('td', {}, [el('b', { text: x.title || x.id }), el('br'), el('span', { class: 'small muted', text: [when, onlyText({ only: x.only })].filter(Boolean).join(' · ') }),
         x.note ? el('div', { class: 'notetxt small', text: x.note }) : null]),
       el('td', { text: x.cls }), el('td', { class: 'num', text: String(x.n) + (x.groups ? ' (A/B)' : '') }),
       el('td', {}, [stateBadge(x.state)]),
