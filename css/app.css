@@ -152,6 +152,7 @@ th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);verti
 th{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
 tr:last-child td{border-bottom:0}
 .tablebox td:first-child{white-space:nowrap}
+.tablebox td.mvcell+td{white-space:nowrap}
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 td.num{font-weight:600}
 tr.sel td{background:var(--bg)}
@@ -164,6 +165,12 @@ td.act button+button{margin-left:4px}
 .badge.arch{border-style:dashed}
 tr.arch td{color:var(--muted)}
 tr.arch td b{font-weight:600}
+th.mvcell,td.mvcell{width:1%;padding-left:6px;padding-right:0}
+td.mvcell{white-space:nowrap}
+button.mv{display:block;width:30px;min-height:22px;padding:0;margin:1px 0;font-size:.7rem;line-height:1;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--muted);cursor:pointer}
+button.mv:hover:not([disabled]),button.mv:focus-visible{border-color:var(--accent);color:var(--accent)}
+button.mv[disabled]{opacity:.3;cursor:default}
+tr.moved td{background:var(--bg);transition:background .6s}
 button.mini.danger{color:var(--warn);border-color:var(--warn)}
 .qr{width:150px;flex:0 0 auto;background:#fff;border-radius:8px;padding:4px}
 .qr svg{display:block;width:100%;height:auto}

@@ -1,5 +1,5 @@
 /* Písomky: spoločné pomôcky (texty v jazykoch, spojenie so skriptom tabuľky, drobnosti pre stránku). */
-var APP = { version: '1.15' };
+var APP = { version: '1.16' };
 
 /* ---------- stránka ---------- */
 function $(id) { return document.getElementById(id); }
