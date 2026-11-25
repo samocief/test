@@ -54,7 +54,7 @@
  * (tVoid: v balíku void = 'full' plný bod pre všetkých, 'skip' nezapočíta sa). Poznámka k písomke (tNote, stĺpec „poznámka“).
  * Stupnica známok (tGrades). Výsledky v hárku Res_… sú vždy v abecednom poradí (učiteľ na konci) a nový hárok výsledkov má filter.
  */
-const VERSION = '1.15.1';
+const VERSION = '1.16';
 const APP_URL = 'https://samocief.github.io/test/';
 const APP_NAME = 'Písomky';
 
@@ -362,7 +362,7 @@ const ROUTES = {
   pupilInit: pupilInit_, pupilLogin: pupilLogin_, pupilBegin: pupilBegin_, pupilSave: pupilSave_, pupilEvent: pupilEvent_, pupilAway: pupilAway_, pupilSubmit: pupilSubmit_, pupilState: pupilState_, pupilResult: pupilResult_,
   tInit: tInit_, tCreateTest: tCreateTest_, tTest: tTest_, tSetTest: tSetTest_, tUnlock: tUnlock_, tReturn: tReturn_, tAddTime: tAddTime_, tAbsent: tAbsent_, tFixKey: tFixKey_, tTextAns: tTextAns_, tExportPupil: tExportPupil_,
   tArchive: tArchive_, tRestore: tRestore_, tDeleteTest: tDeleteTest_,
-  tRename: tRename_, tDuplicate: tDuplicate_, tRecalc: tRecalc_, tVoid: tVoid_, tNote: tNote_, tGrades: tGrades_
+  tRename: tRename_, tMove: tMove_, tDuplicate: tDuplicate_, tRecalc: tRecalc_, tVoid: tVoid_, tNote: tNote_, tGrades: tGrades_
 };
 function handle_(req) {
   try {
@@ -386,7 +386,7 @@ function onOpen() {
     .addItem('Otvoriť aplikáciu učiteľa', 'showTeacherLink')
     .addItem('Skontrolovať otázky', 'checkQuestions')
     .addItem('Doplniť poznámky s odpoveďami (otvorený hárok výsledkov)', 'addAnswerNotes')
-    .addItem('Usporiadať hárky výsledkov (najnovšie vľavo)', 'organizeResults')
+    .addItem('Usporiadať hárky výsledkov (ako zoznam písomiek)', 'organizeResults')
     .addItem('Zmeniť adresu webovej aplikácie', 'changeUrl')
     .addSeparator()
     .addItem('Nový kľúč učiteľa (odhlási všetky zariadenia)', 'newTeacherKey')
@@ -1300,7 +1300,7 @@ function organizeResults_() {
   const tests = ss_().getSheetByName(SH.tests);
   if (!tests) return;
   const t = testsTable_(), cI = t.need('id testu'), active = ss_().getActiveSheet();
-  // riadky v hárku Testy idú podľa času vytvorenia; najstarší sa presúva prvý, každý ďalší sa vloží pred neho
+  // poradie riadkov v hárku Testy (nové pribúdajú dole, šípkami v zozname sa dajú presúvať); prvý riadok sa presúva prvý, každý ďalší sa vloží pred neho
   t.rows.forEach(function (r) {
     const id = s_(r[cI]), sh = id ? resultsGet_(id) : null;
     if (!sh) return;
@@ -1777,6 +1777,22 @@ function tArchive_(req) {
     setTestCells_(f, { stav: STATE.archived, archivovany: now_('yyyy-MM-dd HH:mm') + (f.test.state === 'ready' ? ' (bol pripravený)' : '') });
     forgetTest_(id);
     return { ok: true, rows: Math.max(0, rows.length - 1) };
+  });
+}
+// Šípky v zozname písomiek: zoznam ukazuje hárok Testy odspodu (najnovšie hore), preto „vyššie v zozname“ = o písomku nižšie v hárku.
+// Riadky bez id sa preskakujú. Na okraji zoznamu sa nič nestane.
+function tMove_(req) {
+  const id = String(req.t || ''), up = req.dir === 'up';
+  return withLock_(function () {
+    const f = findTest_(id);
+    if (!f) fail_('no_test');
+    const t = f.t, c = t.need('id testu'), step = up ? 1 : -1;
+    let j = f.rowIndex - 2 + step;
+    while (j >= 0 && j < t.rows.length && !s_(t.rows[j][c])) j += step;
+    if (j < 0 || j >= t.rows.length) return { ok: true, edge: true };
+    const r = f.rowIndex, n = j + 2;
+    t.sheet.moveRows(t.sheet.getRange(r + ':' + r), up ? n + 1 : n);
+    return { ok: true };
   });
 }
 function tRestore_(req) {

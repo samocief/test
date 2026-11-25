@@ -4,7 +4,8 @@
  */
 var T = { s: '', k: '', dz: false, dk: '', init: null, oldScript: false, listOpen: false, printOpen: false, cur: null, poll: null, tab: 'new', sub: 'over', showRes: false, qsForce: false };
 // NEED_SCRIPT: bez neho aplikácia nefunguje; FEAT_SCRIPT: akcie v ponuke ⋯ (premenovať, duplikovať, …), so starším skriptom sú vypnuté.
-var FORM_KEY = 'form', NEED_SCRIPT = '1.14', FEAT_SCRIPT = '1.15';
+// MOVE_SCRIPT: šípky na presúvanie písomiek v zozname (so starším skriptom sa nezobrazia).
+var FORM_KEY = 'form', NEED_SCRIPT = '1.14', FEAT_SCRIPT = '1.15', MOVE_SCRIPT = '1.16';
 // Názov písomky je zároveň jej id (odkaz, QR, hárok výsledkov, priečinok s PDF): bez diakritiky, medzier a bodiek, unikátny bez ohľadu na veľké písmená.
 var NAME_RE = /^[A-Za-z0-9_-]+$/, NAME_MAX = 40;
 
@@ -375,24 +376,50 @@ async function tTests() {
 function tTestsList() {
   var box = $('tests-list');
   box.innerHTML = '';
-  var rows = T.init.tests.slice().reverse();
+  var rows = T.init.tests.slice().reverse(), mv = cmpVer(T.init.v, MOVE_SCRIPT) >= 0 && rows.length > 1;
   if (!rows.length) { box.appendChild(el('p', { class: 'muted', text: t('t.no_tests') })); return; }
   var tb = el('tbody');
-  rows.forEach(function (x) {
+  rows.forEach(function (x, i) {
     var arch = x.state === 'archived';
     var main = arch ? el('button', { type: 'button', class: 'mini', text: t('t.restore'), onclick: function () { tRestore(x, this); } })
       : el('button', { type: 'button', class: 'mini', text: t('t.open'), onclick: function () { tOpenTest(x.id); } });
     var kebab = el('button', { type: 'button', class: 'kebab', text: '⋯', title: t('t.menu'), 'aria-label': t('t.menu_of', { title: x.title || x.id }), 'aria-haspopup': 'menu', 'aria-expanded': 'false',
       onclick: function () { menuOpen(this, testItems(x)); } });
     var when = whenText(x) + (arch && x.archived ? ' · ' + t('t.when_archived', { when: shortWhen(x.archived) }) : '');
-    tb.appendChild(el('tr', { class: arch ? 'arch' : null }, [
+    var arrow = function (dir) {
+      var off = dir === 'up' ? i === 0 : i === rows.length - 1;
+      return el('button', { type: 'button', class: 'mv', text: dir === 'up' ? '▲' : '▼', disabled: off, 'data-mv': x.id + '|' + dir,
+        title: t(dir === 'up' ? 't.move_up' : 't.move_down'), 'aria-label': t(dir === 'up' ? 't.move_up_of' : 't.move_down_of', { title: x.title || x.id }),
+        onclick: function () { tMove(x.id, dir); } });
+    };
+    tb.appendChild(el('tr', { class: [arch ? 'arch' : '', T.moved === x.id ? 'moved' : ''].join(' ').trim() || null, 'data-id': x.id }, [
+      mv ? el('td', { class: 'mvcell' }, [arrow('up'), arrow('down')]) : null,
       el('td', {}, [el('b', { text: x.title || x.id }), el('br'), el('span', { class: 'small muted', text: [when, onlyText({ only: x.only })].filter(Boolean).join(' · ') }),
         x.note ? el('div', { class: 'notetxt small', text: x.note }) : null]),
       el('td', { text: x.cls }), el('td', { class: 'num', text: String(x.n) + (x.groups ? ' (A/B)' : '') }),
       el('td', {}, [stateBadge(x.state)]),
       el('td', { class: 'act' }, [main, kebab])]));
   });
-  box.appendChild(el('div', { class: 'tablebox' }, [el('table', {}, [el('thead', {}, [el('tr', {}, [t('t.col_test'), t('t.col_class'), t('t.col_n'), t('t.col_state'), ''].map(function (h, i) { return el('th', { class: i === 2 ? 'num' : '', text: h }); }))]), tb])]));
+  var heads = [t('t.col_test'), t('t.col_class'), t('t.col_n'), t('t.col_state'), ''].map(function (h, i) { return el('th', { class: i === 2 ? 'num' : '', text: h }); });
+  if (mv) heads.unshift(el('th', { class: 'mvcell', 'aria-label': t('t.col_order') }));
+  box.appendChild(el('div', { class: 'tablebox' }, [el('table', {}, [el('thead', {}, [el('tr', {}, heads)]), tb])]));
+}
+// Šípky ▲▼: zoznam sa prekreslí hneď, hárok Testy sa upraví na pozadí (kliky idú do skriptu po jednom, v poradí).
+// Po prekreslení ostane zameraná tá istá šípka pri presunutej písomke, takže sa dá klikať / stláčať Enter opakovane.
+function tMove(id, dir) {
+  var a = T.init.tests, i = a.findIndex(function (x) { return x.id === id; }), j = i + (dir === 'up' ? 1 : -1);
+  if (i < 0 || j < 0 || j >= a.length) return;
+  var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  T.moved = id; clearTimeout(T.movedTm); T.movedTm = setTimeout(function () { T.moved = null; var r = document.querySelector('tr.moved'); if (r) r.classList.remove('moved'); }, 1200);
+  tTestsList();
+  var b = document.querySelector('button[data-mv="' + (window.CSS && CSS.escape ? CSS.escape(id + '|' + dir) : id + '|' + dir) + '"]');
+  if (b && !b.disabled) b.focus(); else if (b) { var o = b.parentNode.querySelector('button.mv:not([disabled])'); if (o) o.focus(); }
+  T.moveQ = (T.moveQ || Promise.resolve()).then(function () { return api('tMove', A({ t: id, dir: dir })); })
+    .catch(function (e) {
+      tStatus('tests-msg', t('t.move_err', { err: errText(e) }), 'bad');
+      T.moveQ = Promise.resolve();
+      return refreshInit().then(function () { if (T.tab === 'tests') tTestsList(); }).catch(function () {});
+    });
 }
 // Náhradný termín: „náhradný termín za Geo8A · 3 žiaci“
 function onlyText(x) {

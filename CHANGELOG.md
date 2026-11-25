@@ -1,5 +1,13 @@
 # Zmeny
 
+## 1.16 (2026-11-25) – treba vymeniť skript tabuľky
+
+- **Šípky ▲▼ v zozname písomiek**: písomku posunieš vyššie alebo nižšie. Zoznam sa prekreslí hneď, poradie sa uloží
+  presunom riadka v hárku Testy (zoznam ho ukazuje odspodu, nové písomky pribúdajú hore). Po kliku ostane zameraná šípka
+  pri presunutej písomke, takže sa dá klikať aj stláčať Enter opakovane. Keď sa uloženie nepodarí, zoznam sa vráti podľa tabuľky.
+- Ponuka v tabuľke **Usporiadať hárky výsledkov** zoradí hárky `Res_…` podľa tohto poradia.
+- So starším skriptom sa šípky nezobrazia, ostatné funguje ako doteraz.
+
 ## 1.15.2 (2026-11-25) – skript netreba meniť
 
 - **Zoznam písomiek: kratší riadok.** Pri kópii / náhradnom termíne sa v zozname už nepíše „z písomky …“ (zdroj ostáva
